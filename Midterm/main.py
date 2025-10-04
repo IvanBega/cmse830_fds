@@ -10,7 +10,7 @@ st.set_page_config(page_title="Heart Disease Analysis", layout="wide")
 
 st.title("Heart Disease Analysis")
 st.markdown('''
-            For this app, we will be alanyzing different factors that may impact your chances of having a heart-related disease.
+            For this app, we will be analyzing different factors that may impact your chances of having a heart-related disease.
             
             
             With over 20 features in out dataset, we will try to extract the most number of useful information,
@@ -39,16 +39,27 @@ with col3:
 with col4:
     st.metric("Average BMI", f"{df['BMI'].mean()    }")
     
-st.subheader("Age Distribution of our Participants!", anchor=False)
 
-# Age distribution by every year chart
-age_counts = df['Age'].value_counts().sort_index()
-st.bar_chart(age_counts)
+# https://docs.streamlit.io/develop/api-reference/text/st.markdown
+st.markdown("<h3 style='text-align: center;'>Age distribution of our participants!</h3>", unsafe_allow_html=True)
+col1, col2 = st.columns(2)
 
-# Age distribution by bins of 5 chart
-max_age = int(df['Age'].max()) + 5
-age_bins = list(range(15, max_age, 5))
-age_labels = [f"{i}-{i+4}" for i in range(15, max_age-5, 5)]
-df['Age Group'] = pd.cut(df['Age'], bins=age_bins, labels=age_labels)
-age_distribution = df['Age Group'].value_counts().sort_index()
-st.bar_chart(age_distribution)
+with col1:
+    # Age distribution by every year chart
+    age_counts = df['Age'].value_counts().sort_index()
+    st.bar_chart(age_counts)
+
+with col2:
+    # Age distribution by bins of 5 chart
+    max_age = int(df['Age'].max()) + 5
+    age_bins = list(range(15, max_age, 5))
+    age_labels = [f"{i}-{i+4}" for i in range(15, max_age-5, 5)]
+    df['Age Group'] = pd.cut(df['Age'], bins=age_bins, labels=age_labels)
+    age_distribution = df['Age Group'].value_counts().sort_index()
+    st.bar_chart(age_distribution)
+
+plt.figure(figsize=(10, 6))
+sns.heatmap(df.isnull(), cbar=True, cmap='coolwarm')
+plt.title('Heatmap of Missing Values')
+plt.xlabel('Columns')
+plt.ylabel('Rows')
