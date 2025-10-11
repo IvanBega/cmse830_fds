@@ -50,4 +50,3 @@ st.dataframe(comparison_df)
 st.subheader("Dataset 2: Health Disease by Country")
 
 df_country = load_country()
-st.write(df_country.describe())

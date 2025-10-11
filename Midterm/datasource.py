@@ -6,6 +6,12 @@ from sklearn.impute import KNNImputer
 
 def load_country():
     df = pd.read_csv("country.csv")
+    df = df.rename(columns={
+    'HeartDiseaseRatesAgeStandardizedRate_2022': 'std_rate_2022',
+    'HeartDiseaseRatesASRDALYsPer100k_2021': 'dalys_2021',
+    'HeartDiseaseRatesASRDeathsPer100k_2021': 'deaths_2021',
+    'HeartDiseaseRatesASRPrevalencePer100k_2021': 'prevalence_2021'
+})
     return df
 def load_and_clean():
     df = pd.read_csv("heart_disease.csv")
