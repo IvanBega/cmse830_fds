@@ -45,8 +45,23 @@ comparison_df = pd.concat(
 )
 comparison_df = comparison_df[['Before_mean', 'After_mean', 'Before_std', 'After_std']] # to reorder columns
 comparison_df = comparison_df.round(3)
-st.subheader("Comparison of Mean and Standard Deviation Before vs After Imputation")
+st.subheader("Comparison of Mean and Standard Deviation Before vs After Imputation (KNN Imputer, n = 5)")
 st.dataframe(comparison_df)
 st.subheader("Dataset 2: Health Disease by Country")
 
 df_country = load_country()
+country_no_flag = df_country[['country', 'std_rate_2022', 'dalys_2021', 'deaths_2021', 'prevalence_2021']]
+total_features = country_no_flag.count()
+st.dataframe(total_features)
+st.markdown('''
+            As we can see from table above, one country is missing standardized death rate - Ivory Coast
+            ''')
+
+st.image("Picture1.png")
+target = ['Liberia', 'Guinea', 'Mali', 'Sierra Leone', 'Burkina Faso']
+mask = df_country['country'].isin(target)
+df_target = df_country[mask]
+df_target = df_target[['country', 'std_rate_2022']]
+st.markdown(f'''By performing KNN Imputation, using the data from five closest countires: Liberia, Guinea, Mali, Sierra Leone, Burkina Faso, we impute Ivory Coast with the std_rate_2022 value: {df_target['std_rate_2022'].mean()}''')
+
+st.dataframe(df_target)
