@@ -7,6 +7,14 @@ from imblearn.over_sampling import SMOTE
 
 
 heart_disease_file = 'heart_disease.csv'
+le_gender = LabelEncoder()
+le_smoker = LabelEncoder()
+le_diabetes = LabelEncoder()
+le_high_blood_pressure = LabelEncoder()
+le_heart_disease = LabelEncoder()
+# ChatGPT 5 was used on October 10 for line below, to help with handle_unknown
+oe = OrdinalEncoder(categories=[['Low', 'Medium', 'High']], handle_unknown='use_encoded_value', unknown_value=-1)
+    
 def load_country():
     df = pd.read_csv("country.csv")
     df = df.rename(columns={
@@ -26,25 +34,24 @@ def load_and_clean():
 def load_encoded():
     # Source for some code - HW 2
     df = load_and_clean()
-    le_gender = LabelEncoder()
-    le_smoker = LabelEncoder()
-    le_diabetes = LabelEncoder()
-    le_high_blood_pressure = LabelEncoder()
-    le_heart_disease = LabelEncoder()
     
     df['Gender_encoded'] = le_gender.fit_transform(df['Gender'])
     df['Smoking_encoded'] = le_smoker.fit_transform(df['Smoking'])
     df['Diabetes_encoded'] = le_diabetes.fit_transform(df['Diabetes'])
     df['High Blood Pressure_encoded'] = le_high_blood_pressure.fit_transform(df['High Blood Pressure'])
     df['Heart Disease Status_encoded'] = le_heart_disease.fit_transform(df['Heart Disease Status'])
-    
-    stress = [['Low', 'Medium', 'High']]
-    # ChatGPT 5 was used on October 10 for line below, to help with handle_unknown
-    oe = OrdinalEncoder(categories=stress, handle_unknown='use_encoded_value', unknown_value=-1)
     df['Stress Level_encoded'] = oe.fit_transform(df[['Stress Level']])
     
     return df
 
+def decode_df(df):
+    df['Gender'] = le_gender.inverse_transform(df['Gender_encoded'])
+    df['Smoking'] = le_smoker.inverse_transform(df['Smoking_encoded'])
+    df['Diabetes'] = le_diabetes.inverse_transform(df['Diabetes_encoded'])
+    df['High Blood Pressure'] = le_high_blood_pressure.inverse_transform(df['High Blood Pressure_encoded'])
+    df['Heart Disease Status'] = le_heart_disease.inverse_transform(df['Heart Disease Status_encoded'])
+    df['Stress Level'] = oe.inverse_transform(df[['Stress Level_encoded']])[:, 0]
+    return df
 def load_encoded_dropped():
     df = load_encoded()
     df = df.drop(['Gender', 'Stress Level', 'Diabetes', 'High Blood Pressure', 'Smoking', 'Heart Disease Status'], axis=1)
