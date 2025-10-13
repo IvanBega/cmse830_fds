@@ -4,6 +4,9 @@ import streamlit as st
 from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
 from sklearn.impute import KNNImputer
 from imblearn.over_sampling import SMOTE
+
+
+heart_disease_file = 'heart_disease.csv'
 def load_country():
     df = pd.read_csv("country.csv")
     df = df.rename(columns={
@@ -14,9 +17,9 @@ def load_country():
 })
     return df
 def load_and_clean():
-    df = pd.read_csv("heart_disease.csv")
+    df = pd.read_csv(heart_disease_file)
     columns_to_keep = ["Age", "Gender", "Blood Pressure", "Cholesterol Level", "Smoking", "Diabetes", "BMI", "High Blood Pressure", "Stress Level", "Heart Disease Status",
-                       "Triglyceride Level"]
+                       "Triglyceride Level", "Sleep Hours"]
     df = df[columns_to_keep]
     return df
 

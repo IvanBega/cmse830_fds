@@ -3,6 +3,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import streamlit as st
 from datasource import load_and_clean, load_country
+import plotly.express as px
 
 df = load_and_clean()
 df_country = load_country()
@@ -43,7 +44,7 @@ with col4:
     
 
 # https://docs.streamlit.io/develop/api-reference/text/st.markdown
-st.markdown("<h3 style='text-align: center;'>Age distribution of participants</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center;'>Age distribution of dataset participants</h3>", unsafe_allow_html=True)
 st.markdown("Is age the most important parameter in evaluating heart health?")
 col1, col2 = st.columns(2)
 
@@ -67,6 +68,24 @@ st.markdown('''
 
 health_stats = df.describe().T
 st.dataframe(health_stats, use_container_width=True)
+
+
+country_data = load_country()
+
+st.title("Heart Disease Distrubution ")
+
+# https://plotly.com/python/choropleth-maps/
+# https://plotly.github.io/plotly.py-docs/generated/plotly.express.choropleth.html
+countries = px.choropleth(
+    country_data, locations="country",
+    locationmode="country names",
+    color="std_rate_2022",
+    hover_name="country",
+    color_continuous_scale=px.colors.sequential.Plasma,
+    title="Global Distribution of Heart Disease"
+)
+
+st.plotly_chart(countries)
 
 st.subheader("Overview of the Heart Disease by Country, first 10 rows")
 
