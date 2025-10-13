@@ -67,5 +67,12 @@ def load_oversampled(df=None):
     smote = SMOTE()
     X_new, y_new = smote.fit_resample(X, y)
     
-    df_new = pd.concat([X_new, y_new], axis=1)
+    # ChatGPT 4 was used here to help add a column is_synthetic
+    
+    n_original = len(X)
+    n_resampled = len(X_new)
+    is_synthetic = [0]*n_original + [1]*(n_resampled-n_original)
+    
+    df_new = pd.concat([X_new.reset_index(drop=True), y_new.reset_index(drop=True)], axis=1)
+    df_new['is_synthetic'] = is_synthetic
     return df_new
