@@ -34,17 +34,19 @@ def load_and_clean():
 def load_encoded():
     # Source for some code - HW 2
     df = load_and_clean()
-    
+    # Encoding for finary variables
     df['Gender_encoded'] = le_gender.fit_transform(df['Gender'])
     df['Smoking_encoded'] = le_smoker.fit_transform(df['Smoking'])
     df['Diabetes_encoded'] = le_diabetes.fit_transform(df['Diabetes'])
     df['High Blood Pressure_encoded'] = le_high_blood_pressure.fit_transform(df['High Blood Pressure'])
     df['Heart Disease Status_encoded'] = le_heart_disease.fit_transform(df['Heart Disease Status'])
+    #Encoding for ordinal variable
     df['Stress Level_encoded'] = oe.fit_transform(df[['Stress Level']])
     
     return df
 
 def decode_df(df):
+    # Decoding back using same encoders
     df['Gender'] = le_gender.inverse_transform(df['Gender_encoded'])
     df['Smoking'] = le_smoker.inverse_transform(df['Smoking_encoded'])
     df['Diabetes'] = le_diabetes.inverse_transform(df['Diabetes_encoded'])
@@ -53,19 +55,21 @@ def decode_df(df):
     df['Stress Level'] = oe.inverse_transform(df[['Stress Level_encoded']])[:, 0]
     return df
 def load_encoded_dropped():
+    #Returns only encoded features, with corresponding original features dropped
     df = load_encoded()
     df = df.drop(['Gender', 'Stress Level', 'Diabetes', 'High Blood Pressure', 'Smoking', 'Heart Disease Status'], axis=1)
     return df
 
 
 def load_imputed():
+    #KNN Imputation for missing values
     df = load_encoded()
     imputer = KNNImputer(n_neighbors=5)
-    
     df_imputed = pd.DataFrame(imputer.fit_transform(df.select_dtypes(include=['number'])), columns=df.select_dtypes(include=['number']).columns)
     return df_imputed
 
 def load_oversampled(df=None):
+    # Oversample by smoking status using imblearn library
     if df is None:
         df = load_encoded_dropped()
     
@@ -77,7 +81,7 @@ def load_oversampled(df=None):
     smote = SMOTE()
     X_new, y_new = smote.fit_resample(X, y)
     
-    # ChatGPT 4 was used here to help add a column is_synthetic
+    # ChatGPT 4o was used here on 10/13/2025 to help add a column 'is_synthetic'
     
     n_original = len(X)
     n_resampled = len(X_new)

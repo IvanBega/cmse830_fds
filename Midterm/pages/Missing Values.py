@@ -10,7 +10,7 @@ df = load_and_clean()
 st.title("What is the data?")
 st.subheader("Dataset 1: Health Indicators")
 st.markdown('''
-            This dataset contains over 55 thousand records with 21 recorded features.
+            This dataset contains over 10 thousand records with 21 recorded features.
             Although most values are recorded, there are some blank values which need
             to be addressed. Below is the heatmap of missing values for this dataset''')
 

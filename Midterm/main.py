@@ -73,7 +73,8 @@ st.dataframe(health_stats, use_container_width=True)
 country_data = load_country()
 
 st.title("Heart Disease Distrubution ")
-
+st.write("This dataset enables us to see the distribution of heart disease around the world.")
+st.write("It is important because this features are influenced by sociel, economic, political factors.")
 # https://plotly.com/python/choropleth-maps/
 # https://plotly.github.io/plotly.py-docs/generated/plotly.express.choropleth.html
 countries = px.choropleth(

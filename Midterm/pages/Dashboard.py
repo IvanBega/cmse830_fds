@@ -57,9 +57,10 @@ if stress != "Any":
 filtered_df = filtered_df[
     (filtered_df['BMI'] >= bmi[0]) & (filtered_df['BMI'] <= bmi[1])
 ]
+# End of ChatGPT generated section
 #####################################
 st.subheader("Filtered Population")
-
+st.write("Below you can see how the population changes based on selected filters")
 col1, col2, col3 = st.columns(3)
 
 with col1:
