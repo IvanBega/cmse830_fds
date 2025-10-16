@@ -15,8 +15,8 @@ st.markdown('''
             The goal of this app is to analyze different factors that may impact your chances of having a heart-related disease.
             
             
-            With 10 features in Heart Diasease dataset, accompanied by the geographical data of heart disease by country,
-            the most important information will be considered in determining whether you or your family has a risk of having a heart disease.
+            With ove a dozen of features in Heart Diasease dataset, accompanied by the geographical data of heart disease by country,
+            the most important information will be considered in determining whether you or someone you know has a risk of developing a heart disease.
             ''')
 
 
@@ -45,7 +45,10 @@ with col4:
 
 # https://docs.streamlit.io/develop/api-reference/text/st.markdown
 st.markdown("<h3 style='text-align: center;'>Age distribution of dataset participants</h3>", unsafe_allow_html=True)
-st.markdown("Is age the most important parameter in evaluating heart health?")
+st.markdown('''Age plays an important factor in evaluating the health of the heart.
+            When working with a dataset, it is important to make sure that every population group
+            is well-represented. In our case, we have a pretty uniform distribution of data
+            by age.''')
 col1, col2 = st.columns(2)
 
 with col1:
@@ -63,7 +66,11 @@ with col2:
     st.bar_chart(age_distribution)
 
 st.markdown('''
-            Basic statistical summaries of the dataset
+            Basic statistical summaries of the dataset. The information from max and min values can
+            be used to determine possible outliers. By looking at them, it appears that all values are within
+            acceptable range and do not contain outliers or errors. For examples, sleep hours are in
+            the range between 4 and 10, Body Mass Index (BMI) is between 18 and 40, Cholesterol Level
+            is ranging from 150 to 300 and so on.
             ''')
 
 health_stats = df.describe().T
