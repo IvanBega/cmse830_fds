@@ -2,7 +2,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import streamlit as st
-from datasource import load_and_clean, load_country
+from datasource import *
 import plotly.express as px
 
 df = load_and_clean()
@@ -72,6 +72,11 @@ st.markdown('''
             the range between 4 and 10, Body Mass Index (BMI) is between 18 and 40, Cholesterol Level
             is ranging from 150 to 300 and so on.
             ''')
+
+st.subheader("Encoding")
+
+st.write("In order to process the data correctly, some encoding had to be performed on categorical (yes/no or 0/1) variables such as Gender, Diabetes, Smoking. For ordinal variable Stress Level, which can be either Low, Medium, or High, ordinal encoder was used. It is important because Stress levels have an order and can be compared between each other, for example, Medium stress is higher that Low stress")
+st.dataframe(load_encoded_dropped().head(10))
 
 health_stats = df.describe().T
 st.dataframe(health_stats, use_container_width=True)
