@@ -27,6 +27,13 @@ def load_country():
     'HeartDiseaseRatesASRDeathsPer100k_2021': 'deaths_2021',
     'HeartDiseaseRatesASRPrevalencePer100k_2021': 'prevalence_2021'
 })
+    
+    # Performing imputation on the spot
+    
+    countries_for_avg = ['Guinea', 'Liberia', 'Sierra Leone', 'Burkina Faso', 'Mali']
+    avg_std_rate = df[df['country'].isin(countries_for_avg)]['std_rate_2022'].mean()
+    df.loc[df['country'] == 'Ivory Coast', 'std_rate_2022'] = avg_std_rate
+    
     return df
 def load_and_clean():
     df = pd.read_csv(heart_disease_file)

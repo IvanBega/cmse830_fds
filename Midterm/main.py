@@ -9,7 +9,6 @@ df = load_and_clean()
 df_country = load_country()
 print(df.head(50))
 st.set_page_config(page_title="Heart Disease Analysis", layout="wide")
-
 st.title("Heart Disease Analysis")
 st.markdown('''
             The goal of this app is to analyze different factors that may impact your chances of having a heart-related disease.

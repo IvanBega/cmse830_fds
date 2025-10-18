@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import streamlit as st
 from datasource import *
 from sklearn.impute import KNNImputer
+from pathlib import Path
 
 st.set_page_config(page_title="Data Source", page_icon="*")
 df = load_and_clean()
@@ -57,7 +58,10 @@ st.markdown('''
             As we can see from table above, one country is missing standardized death rate - Ivory Coast
             ''')
 
-st.image("Picture1.png")
+script_dir = Path(__file__).resolve().parent
+picture_file = script_dir / 'Picture1.png'
+
+st.image(picture_file)
 target = ['Liberia', 'Guinea', 'Mali', 'Sierra Leone', 'Burkina Faso']
 mask = df_country['country'].isin(target)
 df_target = df_country[mask]
