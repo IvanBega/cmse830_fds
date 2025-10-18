@@ -4,9 +4,13 @@ import streamlit as st
 from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
 from sklearn.impute import KNNImputer
 from imblearn.over_sampling import SMOTE
+from pathlib import Path
 
+#heart_disease_file = 'heart_disease.csv'
+script_dir = Path(__file__).resolve().parent
+heart_disease_file = script_dir / 'heart_disease.csv'
+country_file = script_dir / 'country.csv'
 
-heart_disease_file = 'heart_disease.csv'
 le_gender = LabelEncoder()
 le_smoker = LabelEncoder()
 le_diabetes = LabelEncoder()
@@ -16,7 +20,7 @@ le_heart_disease = LabelEncoder()
 oe = OrdinalEncoder(categories=[['Low', 'Medium', 'High']], handle_unknown='use_encoded_value', unknown_value=-1)
     
 def load_country():
-    df = pd.read_csv("country.csv")
+    df = pd.read_csv(country_file)
     df = df.rename(columns={
     'HeartDiseaseRatesAgeStandardizedRate_2022': 'std_rate_2022',
     'HeartDiseaseRatesASRDALYsPer100k_2021': 'dalys_2021',
