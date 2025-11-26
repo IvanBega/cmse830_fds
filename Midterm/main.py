@@ -5,6 +5,7 @@ import streamlit as st
 from datasource import *
 import plotly.express as px
 
+print(load_indicators().head(5))
 df = load_and_clean()
 df_country = load_country()
 print(df.head(50))

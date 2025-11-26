@@ -10,7 +10,7 @@ from pathlib import Path
 script_dir = Path(__file__).resolve().parent
 heart_disease_file = script_dir / 'heart_disease.csv'
 country_file = script_dir / 'country.csv'
-
+indicators_file = script_dir / 'world-data-2023.csv'
 le_gender = LabelEncoder()
 le_smoker = LabelEncoder()
 le_diabetes = LabelEncoder()
@@ -19,6 +19,35 @@ le_heart_disease = LabelEncoder()
 # ChatGPT 5 was used on October 10 for line below, to help with handle_unknown
 oe = OrdinalEncoder(categories=[['Low', 'Medium', 'High']], handle_unknown='use_encoded_value', unknown_value=-1)
     
+def load_indicators():
+    """Load the third indicators dataset with only the 10 most relevant features"""
+    df = pd.read_csv(indicators_file)
+    
+    # Define the 10 most important features for heart disease analysis
+    important_features = [
+        'Country', 
+        'Life expectancy', 
+        'GDP', 
+        'Physicians per Thousand',
+        'Unemployment rate', 
+        'Out of pocket health expenditure', 
+        'Urban population', 
+        'Infant mortality', 
+        'CPI', 
+        'Fertility rate', 
+        'Agricultural land (%)'
+    ]
+    
+    # Keep only features that exist in the dataset
+    available_features = [col for col in important_features if col in df.columns]
+    df = df[available_features]
+    
+    # Basic cleaning
+    df = df.drop_duplicates()
+    df['Country'] = df['Country'].str.strip().str.title()
+    
+    return df
+
 def load_country():
     df = pd.read_csv(country_file)
     df = df.rename(columns={
@@ -101,3 +130,53 @@ def load_oversampled(df=None):
     df_new = pd.concat([X_new.reset_index(drop=True), y_new.reset_index(drop=True)], axis=1)
     df_new['is_synthetic'] = is_synthetic
     return df_new
+
+
+# Add to datasource.py - country name resolution function
+def resolve_country_names():
+    """Manual resolution of country name discrepancies between datasets"""
+    country_mapping = {
+        # Countries in Heart Data -> Indicators Data
+        'Dr Congo': 'Democratic Republic Of The Congo',
+        'Timor-Leste': 'East Timor',
+        'Micronesia': 'Federated States Of Micronesia',
+        'Ireland': 'Republic Of Ireland',
+        'Palestine': 'Palestinian National Authority',
+        'Bahamas': 'The Bahamas',
+        'Gambia': 'The Gambia',
+        
+        # Countries we might want to add mappings for if needed
+        # 'American Samoa': None,  # Not in indicators data
+        # 'Bermuda': None,        # Not in indicators data
+        # 'Cook Islands': None,   # Not in indicators data
+    }
+    return country_mapping
+
+def merge_country_datasets():
+    """Merge heart disease data with indicators data after resolving name discrepancies"""
+    df_country = load_country()
+    df_indicators = load_indicators()
+    
+    # Apply country name standardization
+    country_mapping = resolve_country_names()
+    
+    # Create clean country names for merging
+    df_country['country_clean'] = df_country['country'].str.strip().str.title()
+    df_indicators['Country_clean'] = df_indicators['Country'].str.strip().str.title()
+    
+    # Apply the mapping to heart disease data
+    df_country['country_clean'] = df_country['country_clean'].replace(country_mapping)
+    
+    # Merge datasets
+    merged_df = pd.merge(
+        df_country, 
+        df_indicators, 
+        left_on='country_clean', 
+        right_on='Country_clean', 
+        how='inner'
+    )
+    
+    # Drop the temporary clean columns
+    merged_df = merged_df.drop(['country_clean', 'Country_clean'], axis=1)
+    
+    return merged_df
