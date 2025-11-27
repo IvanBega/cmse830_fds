@@ -28,10 +28,10 @@ def load_indicators():
         'Country', 
         'Life expectancy', 
         'GDP', 
-        'Physicians per Thousand',
+        'Physicians per thousand',
         'Unemployment rate', 
         'Out of pocket health expenditure', 
-        'Urban population', 
+        'Urban_population', 
         'Infant mortality', 
         'CPI', 
         'Fertility rate', 
@@ -46,7 +46,38 @@ def load_indicators():
     df = df.drop_duplicates()
     df['Country'] = df['Country'].str.strip().str.title()
     
+    # Clean numeric columns - remove special characters and convert to numeric
+    # Clean GDP - remove dollar signs, commas and convert to float
+    if 'GDP' in df.columns:
+        df['GDP'] = df['GDP'].astype(str).str.replace('$', '', regex=False)
+        df['GDP'] = df['GDP'].str.replace(',', '', regex=False)
+        df['GDP'] = pd.to_numeric(df['GDP'], errors='coerce')
+    
+    # Clean other numeric columns that might have percentage signs or commas
+    numeric_columns_to_clean = [
+        'Physicians per thousand',
+        'Unemployment rate', 
+        'Out of pocket health expenditure', 
+        'Urban_population', 
+        'Infant mortality', 
+        'CPI', 
+        'Fertility rate', 
+        'Agricultural land (%)'
+    ]
+    
+    for col in numeric_columns_to_clean:
+        if col in df.columns:
+            # Remove percentage signs and commas
+            df[col] = df[col].astype(str).str.replace('%', '', regex=False)
+            df[col] = df[col].str.replace(',', '', regex=False)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Ensure Life expectancy is numeric (in case it has any formatting)
+    if 'Life expectancy' in df.columns:
+        df['Life expectancy'] = pd.to_numeric(df['Life expectancy'], errors='coerce')
+    
     return df
+
 
 def load_country():
     df = pd.read_csv(country_file)
