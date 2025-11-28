@@ -59,7 +59,8 @@ fig_parallel = px.parallel_coordinates(
 st.plotly_chart(fig_parallel, use_container_width=True)
 
 # Statistical analysis
-st.subheader("Statistical Analysis - Risk Factor Correlations")
+st.subheader("Statistical Analysis: Top Risk Factor Correlations")
+st.write("Below you can see which factors contribute the most to the heart disease.")
 correlation_matrix = df_encoded.corr()['Heart Disease Status_encoded'].sort_values(ascending=False)
 st.dataframe(correlation_matrix.iloc[1:6])  # Top 5 correlations excluding itself
 
@@ -70,9 +71,8 @@ st.dataframe(correlation_matrix.iloc[1:6])  # Top 5 correlations excluding itsel
 st.header("2. Interactive Bubble Map - Global Heart Disease Burden")
 
 st.markdown("""
-**Advanced Technique:** Bubble Map with Multiple Dimensions  
-**Purpose:** Visualize geographic distribution with size and color encoding multiple variables  
-**Insight:** Shows heart disease prevalence, mortality, and burden simultaneously across countries
+This interactive bubble map combines two datasets.
+It allows us to see heart disease prevalence, mortality, and burden simultaneously across countries.
 """)
 
 # Create bubble map
@@ -105,202 +105,103 @@ fig_bubble.update_layout(
 
 st.plotly_chart(fig_bubble, use_container_width=True)
 
-# Statistical analysis
-st.subheader("Statistical Analysis - Country Level Metrics")
-country_stats = df_country[['std_rate_2022', 'dalys_2021', 'deaths_2021', 'prevalence_2021']].describe()
-st.dataframe(country_stats)
 
 # =============================================================================
-# VISUALIZATION 3: INDICATORS DATASET - KDE Plot All Countries
+# VISUALIZATION 5: RAINCLOUD PLOT - Development Indicators by Income Groups
 # =============================================================================
 
-st.header("3. KDE Analysis - Economic vs Health Indicators")
+st.header("3. Raincloud Plot - Country Development Indicators by Income Groups")
 
 st.markdown("""
-**Advanced Technique:** 2D Kernel Density Estimation  
-**Purpose:** Visualize the joint distribution between economic development and health outcomes  
-**Insight:** Reveals density patterns and correlations between GDP and life expectancy across all countries
-""")
+The Raincloud Plot combines three plots at the same time: box plot, violin plot, and a scatterplot.  
+In this example we are attempting to compare some of the most important life-changing indicators by the income group.
+In particular, we used Life expectancy, number of physicians per thousand, and an infant mortality rates.
 
-# Prepare data for KDE plot
-df_kde = df_indicators.copy()
+Not surprisingly, it is easy to see that the higher income the country has, the longer life expectancy and number of physicians per 1000 population they have.
 
-# Remove rows with missing values for clean visualization
-df_kde_clean = df_kde[['Country', 'GDP', 'Life expectancy']].dropna()
+Conversely, the infant mortality rate appears to decrease with the increase of income.""")
 
-st.write(f"**Data available for KDE:** {len(df_kde_clean)} countries with both GDP and Life expectancy data")
+# Prepare data for raincloud plot
+df_raincloud = df_indicators.copy()
 
-if len(df_kde_clean) > 1:
-    # Show a preview of the cleaned data
-    st.subheader("Data Preview")
-    st.dataframe(df_kde_clean.head(10))
+# Create income groups based on GDP tertiles
+if 'GDP' in df_raincloud.columns:
+    df_raincloud['Income_Group'] = pd.qcut(df_raincloud['GDP'], q=3, 
+                                         labels=['Low Income', 'Medium Income', 'High Income'])
     
-    # Create KDE plot for all countries
-    st.subheader("KDE Plot - GDP vs Life Expectancy (All Countries)")
+    # Select key development indicators
+    indicators = ['Life expectancy', 'Physicians per thousand', 'Infant mortality']
     
-    # Use simple histogram2d for KDE visualization
-    fig_kde = go.Figure()
+    # Filter to indicators that exist in the dataset
+    available_indicators = [ind for ind in indicators if ind in df_raincloud.columns]
     
-    fig_kde.add_trace(go.Histogram2d(
-        x=df_kde_clean['GDP'],
-        y=df_kde_clean['Life expectancy'],
-        colorscale='Blues',
-        nbinsx=20,
-        nbinsy=20
-    ))
-    
-    fig_kde.update_layout(
-        height=500,
-        title="GDP vs Life Expectancy - All Countries",
-        xaxis_title="GDP ($)",
-        yaxis_title="Life Expectancy (Years)",
-        showlegend=False
-    )
-    
-    # Add correlation annotation
-    correlation = df_kde_clean['GDP'].corr(df_kde_clean['Life expectancy'])
-    fig_kde.add_annotation(
-        x=0.05, y=0.95,
-        xref="paper", yref="paper",
-        text=f"Correlation: {correlation:.3f}",
-        showarrow=False,
-        bgcolor="white",
-        bordercolor="black",
-        borderwidth=1
-    )
-    
-    st.plotly_chart(fig_kde, use_container_width=True)
-    
-    # Scatter plot overlay to show individual countries
-    st.subheader("Scatter Plot with Country Labels")
-    
-    fig_scatter = px.scatter(
-        df_kde_clean,
-        x='GDP',
-        y='Life expectancy',
-        hover_name='Country',
-        title="GDP vs Life Expectancy - Individual Countries",
-        labels={
-            'GDP': 'GDP ($)',
-            'Life expectancy': 'Life Expectancy (Years)'
-        }
-    )
-    
-    fig_scatter.update_layout(height=500)
-    st.plotly_chart(fig_scatter, use_container_width=True)
-    
-    # Log scale version for better visualization
-    st.subheader("Log Scale Version for Better Visualization")
-    
-    # Apply log scale to GDP
-    df_kde_log = df_kde_clean.copy()
-    df_kde_log['GDP_log'] = np.log10(df_kde_log['GDP'] + 1)
-    
-    fig_log = go.Figure()
-    
-    fig_log.add_trace(go.Histogram2d(
-        x=df_kde_log['GDP_log'],
-        y=df_kde_log['Life expectancy'],
-        colorscale='Greens',
-        nbinsx=25,
-        nbinsy=25
-    ))
-    
-    # Customize x-axis ticks to show actual GDP values
-    gdp_ticks = [1e10, 1e11, 1e12, 1e13, 1e14]
-    gdp_tick_labels = ['$10B', '$100B', '$1T', '$10T', '$100T']
-    gdp_log_ticks = [np.log10(gdp) for gdp in gdp_ticks]
-    
-    fig_log.update_layout(
-        height=500,
-        title="GDP (Log Scale) vs Life Expectancy - All Countries",
-        xaxis_title="GDP (Log Scale)",
-        yaxis_title="Life Expectancy (Years)",
-        xaxis=dict(
-            tickvals=gdp_log_ticks,
-            ticktext=gdp_tick_labels
-        ),
-        showlegend=False
-    )
-    
-    # Add correlation annotation for log scale
-    correlation_log = df_kde_log['GDP_log'].corr(df_kde_log['Life expectancy'])
-    fig_log.add_annotation(
-        x=0.05, y=0.95,
-        xref="paper", yref="paper",
-        text=f"Correlation: {correlation_log:.3f}",
-        showarrow=False,
-        bgcolor="white",
-        bordercolor="black",
-        borderwidth=1
-    )
-    
-    st.plotly_chart(fig_log, use_container_width=True)
-
-else:
-    st.error(f"""
-    Insufficient data available for KDE visualization. 
-    
-    **Required columns:** 'GDP', 'Life expectancy'
-    **Available data:** {len(df_kde_clean)} rows with both GDP and Life expectancy data
-    **Total dataset:** {len(df_indicators)} countries
-    """)
-
-# Statistical analysis
-st.subheader("Statistical Analysis - GDP vs Life Expectancy")
-
-if len(df_kde_clean) > 1:
-    # Calculate basic statistics
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Number of Countries", len(df_kde_clean))
-        st.metric("Correlation", f"{correlation:.3f}")
-    
-    with col2:
-        st.metric("Average GDP", f"${df_kde_clean['GDP'].mean():,.0f}")
-        st.metric("GDP Std Dev", f"${df_kde_clean['GDP'].std():,.0f}")
-    
-    with col3:
-        st.metric("Average Life Expectancy", f"{df_kde_clean['Life expectancy'].mean():.1f} years")
-        st.metric("Life Exp Std Dev", f"{df_kde_clean['Life expectancy'].std():.1f} years")
-    
-    with col4:
-        st.metric("GDP Range", f"${df_kde_clean['GDP'].min():,.0f} - ${df_kde_clean['GDP'].max():,.0f}")
-        st.metric("Life Exp Range", f"{df_kde_clean['Life expectancy'].min():.1f} - {df_kde_clean['Life expectancy'].max():.1f} years")
-    
-    # Detailed statistics table
-    st.subheader("Detailed Statistics")
-    stats_summary = df_kde_clean[['GDP', 'Life expectancy']].describe()
-    st.dataframe(stats_summary.round(3))
-    
-    # Top and bottom countries
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Countries with Highest GDP:**")
-        top_gdp = df_kde_clean.nlargest(5, 'GDP')[['Country', 'GDP', 'Life expectancy']]
-        st.dataframe(top_gdp.reset_index(drop=True))
-    
-    with col2:
-        st.write("**Countries with Highest Life Expectancy:**")
-        top_life = df_kde_clean.nlargest(5, 'Life expectancy')[['Country', 'Life expectancy', 'GDP']]
-        st.dataframe(top_life.reset_index(drop=True))
-
-# Interpretation
-st.subheader("Interpretation")
-if len(df_kde_clean) > 1:
-    if correlation > 0.7:
-        st.success("**Strong positive correlation** - Higher GDP is strongly associated with longer life expectancy across countries.")
-    elif correlation > 0.3:
-        st.info("**Moderate positive correlation** - Economic development shows a meaningful relationship with health outcomes.")
-    elif correlation > -0.3:
-        st.warning("**Weak correlation** - Limited relationship between economic factors and life expectancy in this dataset.")
-    else:
-        st.error("**Negative correlation** - Unexpected inverse relationship detected.")
-    
-    st.write("The KDE plot shows where countries cluster in terms of economic development and health outcomes, revealing global patterns and potential outliers.")
+    if len(available_indicators) > 0 and 'Income_Group' in df_raincloud.columns:
+        # Create subplots
+        fig, axes = plt.subplots(1, len(available_indicators), figsize=(5*len(available_indicators), 6))
+        if len(available_indicators) == 1:
+            axes = [axes]
         
+        for i, indicator in enumerate(available_indicators):
+            # Prepare data for this indicator
+            plot_data = []
+            groups = []
+            for group in ['Low Income', 'Medium Income', 'High Income']:
+                group_data = df_raincloud[df_raincloud['Income_Group'] == group][indicator].dropna()
+                plot_data.append(group_data)
+                groups.append(group)
+            
+            # Create raincloud plot components
+            # Violin plot
+            parts = axes[i].violinplot(plot_data, showmeans=False, showmedians=False, showextrema=False)
+            
+            # Color the violins
+            for pc in parts['bodies']:
+                pc.set_facecolor('lightblue')
+                pc.set_alpha(0.7)
+            
+            # Box plot
+            axes[i].boxplot(plot_data, positions=range(1, len(plot_data)+1), 
+                           widths=0.3, patch_artist=True,
+                           boxprops=dict(facecolor='lightgray', alpha=0.7),
+                           medianprops=dict(color='red', linewidth=2))
+            
+            # Scatter points (jittered)
+            for j, data in enumerate(plot_data):
+                x = np.random.normal(j+1, 0.1, size=len(data))
+                axes[i].scatter(x, data, alpha=0.5, color='black', s=20)
+            
+            axes[i].set_title(f'{indicator}')
+            axes[i].set_xlabel('Income Group')
+            axes[i].set_ylabel(indicator)
+            axes[i].set_xticks(range(1, len(groups)+1))
+            axes[i].set_xticklabels(groups, rotation=45)
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # Statistical summary
+        st.subheader("Quantitative Summaries by GDP Groups of the plot above")
+        summary_data = []
+        for indicator in available_indicators:
+            for group in ['Low Income', 'Medium Income', 'High Income']:
+                group_data = df_raincloud[df_raincloud['Income_Group'] == group][indicator]
+                summary_data.append({
+                    'Indicator': indicator,
+                    'Income Group': group,
+                    'Count': len(group_data.dropna()),
+                    'Mean': group_data.mean(),
+                    'Median': group_data.median(),
+                    'Std Dev': group_data.std()
+                })
+        
+        summary_df = pd.DataFrame(summary_data)
+        st.dataframe(summary_df.round(3))
+        
+    else:
+        st.warning("Required columns not available for raincloud plot")
+else:
+    st.warning("GDP column not available for creating income groups")
+
 
 # =============================================================================
 # VISUALIZATION 4: MERGED DATASET - 3D Scatter Plot
@@ -309,10 +210,13 @@ if len(df_kde_clean) > 1:
 st.header("4. 3D Scatter Plot - Multidimensional Heart Disease Analysis")
 
 st.markdown("""
-**Advanced Technique:** 3D Scatter Plot with Color and Size Encoding  
-**Purpose:** Explore relationships between three continuous variables and heart disease rates  
-**Insight:** Reveals complex interactions between economic, healthcare, and demographic factors
-""")
+The 3D plots you see combine four features at the same time: 
+
+**Features across x,y,z axis**: heart disease prevalence, GDP of a country, and life expectancy
+
+**Color of the data point**: Heart Disease Rate
+
+From the first left plot we see that *China* and the *United States* go far beyound all other countries. To go more into the details, these countries are removed from the plot on the right.""")
 
 if len(merged_df) > 0:
 
@@ -432,7 +336,7 @@ if len(merged_df) > 0:
             'Life expectancy': ':.1f' if 'Life expectancy' in available_cols else None
         },
         color_continuous_scale=px.colors.sequential.Plasma,
-        title="3D Analysis (Removing 9 Largest Economies)",
+        title="9 additional largest economies removed to compare other countries with lower GDP",
         labels={
             'std_rate_2022': 'Heart Disease Rate',
             'GDP': 'Economic Development',
@@ -457,11 +361,15 @@ if len(merged_df) > 0:
 # COMPREHENSIVE STATISTICAL ANALYSIS
 # =============================================================================
 
-st.header("📈 Comprehensive Statistical Analysis")
 
-# Correlation heatmap for merged dataset
-st.subheader("Cross-Dataset Correlation Heatmap")
-
+st.header("Cross-Dataset Correlation Heatmap")
+st.write("""
+         Since two datasets were combine into one, it is natural to ask yourself a question: how does the correlation heatmap look between two datasets?
+         
+         On the bottom left we see features in very bright red colors from the first dataset, while features from the dataset have a lower correlation.
+         
+         This observation will be important for feature engineering when building a machine learning model, since one dataset with only four features might dominate over a larger dataset.
+         """)
 if len(merged_df) > 0:
     # Select numerical columns for correlation
     numerical_merged = merged_df.select_dtypes(include=[np.number])
@@ -520,43 +428,4 @@ with col2:
 
 # Advanced statistical tests
 st.subheader("Advanced Statistical Tests")
-
-if len(merged_df) > 0 and 'std_rate_2022' in merged_df.columns:
-    # ANOVA test between income groups and heart disease rates
-    if 'GDP' in merged_df.columns:
-        # Create income groups
-        merged_df['Income_Group'] = pd.qcut(merged_df['GDP'], q=3, labels=['Low', 'Medium', 'High'])
-        
-        # Perform ANOVA
-        groups = [group['std_rate_2022'].values for name, group in merged_df.groupby('Income_Group')]
-        f_stat, p_value = stats.f_oneway(*groups)
-        
-        st.write(f"**ANOVA Test: Heart Disease Rates by Income Groups**")
-        st.write(f"F-statistic: {f_stat:.4f}, p-value: {p_value:.4f}")
-        st.write("Significant difference between income groups" if p_value < 0.05 else "No significant difference between income groups")
-
-# Distribution analysis
-st.subheader("Distribution Analysis - Key Variables")
-
-key_variables = []
-if 'std_rate_2022' in merged_df.columns:
-    key_variables.append('std_rate_2022')
-if 'GDP' in merged_df.columns:
-    key_variables.append('GDP')
-if 'Life expectancy' in merged_df.columns:
-    key_variables.append('Life expectancy')
-
-if key_variables:
-    for var in key_variables:
-        col1, col2 = st.columns(2)
-        with col1:
-            # Normality test
-            stat, p_val = stats.normaltest(merged_df[var].dropna())
-            st.write(f"**{var} - Normality Test**")
-            st.write(f"p-value: {p_val:.4f} ({'Normal' if p_val > 0.05 else 'Not Normal'})")
-        
-        with col2:
-            # Skewness and Kurtosis
-            skew = merged_df[var].skew()
-            kurt = merged_df[var].kurtosis()
-            st.write(f"Skewness: {skew:.3f}, Kurtosis: {kurt:.3f}")
+st.write("Question to the audience - are there any additional comprehensive statistical analysis steps I can add?")
