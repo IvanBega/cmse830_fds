@@ -211,3 +211,191 @@ def merge_country_datasets():
     merged_df = merged_df.drop(['country_clean', 'Country_clean'], axis=1)
     
     return merged_df
+
+
+# Add these functions to datasource.py
+
+def load_engineered_features():
+    """Load dataset with engineered features for modeling"""
+    df = load_encoded_dropped()
+    
+    # Handle missing values for numerical features
+    numeric_features = ['Age', 'BMI', 'Cholesterol Level', 'Blood Pressure', 'Stress Level_encoded']
+    available_numeric = [f for f in numeric_features if f in df.columns]
+    
+    if available_numeric:
+        # Impute missing values with median
+        from sklearn.impute import SimpleImputer
+        imputer = SimpleImputer(strategy='median')
+        df_imputed = pd.DataFrame(
+            imputer.fit_transform(df[available_numeric]),
+            columns=available_numeric,
+            index=df.index
+        )
+        
+        # Add imputed features back to dataframe
+        for col in available_numeric:
+            df[col] = df_imputed[col]
+    
+    return df
+
+def create_polynomial_features(df=None):
+    """Create polynomial features from numerical clinical data"""
+    if df is None:
+        df = load_engineered_features()
+    
+    numeric_features = ['Age', 'BMI', 'Cholesterol Level', 'Blood Pressure', 'Stress Level_encoded']
+    available_numeric = [f for f in numeric_features if f in df.columns]
+    
+    if available_numeric:
+        poly = PolynomialFeatures(degree=2, include_bias=False, interaction_only=False)
+        poly_features = poly.fit_transform(df[available_numeric])
+        poly_feature_names = poly.get_feature_names_out(available_numeric)
+        
+        # Create DataFrame with polynomial features
+        df_poly = pd.DataFrame(poly_features, columns=poly_feature_names, index=df.index)
+        
+        # Keep only meaningful features (std > 0.1)
+        meaningful_poly = df_poly.loc[:, df_poly.std() > 0.1]
+        
+        # Combine with original data
+        df_combined = pd.concat([df, meaningful_poly], axis=1)
+        return df_combined
+    
+    return df
+
+def create_binned_features(df=None):
+    """Create binned/categorical features from continuous variables"""
+    if df is None:
+        df = load_engineered_features()
+    
+    # Age binning
+    if 'Age' in df.columns:
+        df['Age_bin'] = pd.cut(df['Age'], bins=[0, 35, 50, 65, 100], 
+                              labels=['Young', 'Middle', 'Senior', 'Elderly'])
+    
+    # BMI categorization
+    if 'BMI' in df.columns:
+        df['BMI_category'] = pd.cut(df['BMI'], 
+                                   bins=[0, 18.5, 25, 30, 100],
+                                   labels=['Underweight', 'Normal', 'Overweight', 'Obese'])
+    
+    # Blood Pressure staging
+    if 'Blood Pressure' in df.columns:
+        df['BP_category'] = pd.cut(df['Blood Pressure'],
+                                  bins=[0, 120, 130, 140, 180, 300],
+                                  labels=['Normal', 'Elevated', 'Stage1', 'Stage2', 'Crisis'])
+    
+    return df
+
+def create_target_encoded_features(df=None):
+    """Create target encoded features for categorical variables"""
+    if df is None:
+        df = load_engineered_features()
+    
+    # Target encoding for stress level (regularized)
+    if 'Stress Level_encoded' in df.columns:
+        # Regularized target encoding
+        df['Stress_Level_TargetEnc'] = df.groupby('Stress Level_encoded')['Heart Disease Status_encoded'].transform(
+            lambda x: (x.sum() + 10 * 0.5) / (len(x) + 10)  # Regularization with alpha=10
+        )
+    
+    return df
+
+def create_country_pca_features():
+    """Create PCA features from country socioeconomic indicators"""
+    merged_df = merge_country_datasets()
+    
+    if len(merged_df) > 0:
+        # Select socioeconomic indicators for PCA
+        socioecon_indicators = ['GDP', 'Life expectancy', 'Physicians per thousand', 
+                               'Urban_population', 'Infant mortality']
+        available_indicators = [ind for ind in socioecon_indicators if ind in merged_df.columns]
+        
+        if len(available_indicators) > 1:
+            # Prepare data for PCA
+            X_socio = merged_df[available_indicators].dropna()
+            
+            if len(X_socio) > 0:
+                # Standardize the data
+                X_standardized = (X_socio - X_socio.mean()) / X_socio.std()
+                
+                # Perform PCA
+                pca = PCA(n_components=2)
+                principal_components = pca.fit_transform(X_standardized)
+                
+                # Create PCA DataFrame
+                df_pca = pd.DataFrame(data=principal_components, 
+                                    columns=['PC1_Development', 'PC2_Development'],
+                                    index=X_socio.index)
+                
+                # Add back to merged_df
+                merged_df_pca = merged_df.loc[X_socio.index].copy()
+                merged_df_pca['PC1_Development'] = df_pca['PC1_Development']
+                merged_df_pca['PC2_Development'] = df_pca['PC2_Development']
+                
+                return merged_df_pca
+    
+    return merged_df
+
+def create_healthcare_access_score():
+    """Create composite healthcare access score from country indicators"""
+    merged_df = merge_country_datasets()
+    
+    if len(merged_df) > 0:
+        # Create composite healthcare access score
+        healthcare_metrics = ['Physicians per thousand', 'Out of pocket health expenditure']
+        available_healthcare = [m for m in healthcare_metrics if m in merged_df.columns]
+        
+        if len(available_healthcare) > 0:
+            # Standardize and combine (inverse for out-of-pocket expenditure - lower is better)
+            healthcare_scores = []
+            for metric in available_healthcare:
+                if metric == 'Out of pocket health expenditure':
+                    # Lower out-of-pocket spending is better (inverse)
+                    score = -merged_df[metric]  # Negative because lower is better
+                else:
+                    score = merged_df[metric]
+                
+                # Standardize
+                score_std = (score - score.mean()) / score.std()
+                healthcare_scores.append(score_std)
+            
+            # Combine scores
+            merged_df['Healthcare_Access_Score'] = sum(healthcare_scores) / len(healthcare_scores)
+    
+    return merged_df
+
+def get_all_engineered_features():
+    """Get complete dataset with all engineered features for modeling"""
+    # Start with basic engineered features
+    df = load_engineered_features()
+    df = create_polynomial_features(df)
+    df = create_binned_features(df)
+    df = create_target_encoded_features(df)
+    
+    # Get country-level engineered features
+    country_pca = create_country_pca_features()
+    country_healthcare = create_healthcare_access_score()
+    
+    # Note: In a real scenario, you would merge these with individual data
+    # based on country matching. For now, we return them separately.
+    
+    return {
+        'individual_features': df,
+        'country_pca_features': country_pca,
+        'country_healthcare_features': country_healthcare
+    }
+
+def get_modeling_dataset():
+    """Get final dataset ready for machine learning modeling"""
+    # Get individual features with all engineering
+    df_model = load_engineered_features()
+    df_model = create_polynomial_features(df_model)
+    df_model = create_binned_features(df_model)
+    df_model = create_target_encoded_features(df_model)
+    
+    # For demonstration, we'll use only individual features
+    # In a complete implementation, you would merge with country features
+    
+    return df_model
