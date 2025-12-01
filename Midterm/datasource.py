@@ -399,3 +399,110 @@ def get_modeling_dataset():
     # In a complete implementation, you would merge with country features
     
     return df_model
+
+# Add these functions to datasource.py
+
+def get_data_with_bins():
+    """Get heart disease data with binned features"""
+    df = load_and_clean()
+    
+    # Age binning
+    if 'Age' in df.columns:
+        df['Age_bin'] = pd.cut(df['Age'], 
+                              bins=[0, 35, 50, 65, 100], 
+                              labels=['Young', 'Middle', 'Senior', 'Elderly'])
+    
+    # BMI categorization
+    if 'BMI' in df.columns:
+        df['BMI_category'] = pd.cut(df['BMI'], 
+                                   bins=[0, 18.5, 25, 30, 100],
+                                   labels=['Underweight', 'Normal', 'Overweight', 'Obese'])
+    
+    # Blood Pressure staging
+    if 'Blood Pressure' in df.columns:
+        df['BP_category'] = pd.cut(df['Blood Pressure'],
+                                  bins=[0, 120, 130, 140, 180, 300],
+                                  labels=['Normal', 'Elevated', 'Stage1', 'Stage2', 'Crisis'])
+    
+    return df
+
+def get_pca_features():
+    """Get PCA features from country socioeconomic indicators"""
+    df = load_indicators()
+    
+    # Select socioeconomic indicators for PCA
+    socioecon_indicators = ['GDP', 'Life expectancy', 'Physicians per thousand', 
+                           'Urban_population', 'Infant mortality']
+    available_indicators = [ind for ind in socioecon_indicators if ind in df.columns]
+    
+    if len(available_indicators) > 1:
+        # Prepare data
+        X = df[available_indicators].dropna()
+        
+        if len(X) > 0:
+            from sklearn.decomposition import PCA
+            from sklearn.preprocessing import StandardScaler
+            
+            # Standardize the data
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+            
+            # Perform PCA
+            pca = PCA(n_components=min(3, len(available_indicators)))
+            principal_components = pca.fit_transform(X_scaled)
+            
+            # Create PCA DataFrame
+            df_pca = pd.DataFrame(data=principal_components, 
+                                columns=[f'PC{i+1}' for i in range(principal_components.shape[1])],
+                                index=X.index)
+            
+            # Add back country and other columns
+            result_df = df.loc[X.index].copy()
+            for col in df_pca.columns:
+                result_df[col] = df_pca[col]
+            
+            # Add PCA metadata
+            result_df['PCA_variance_explained'] = sum(pca.explained_variance_ratio_)
+            result_df['PCA_n_components'] = pca.n_components_
+            
+            return result_df, pca
+    
+    # Return empty DataFrame if PCA fails
+    return pd.DataFrame(), None
+
+def get_combined_features():
+    """Get combined dataset with binned and PCA features ready for modeling"""
+    # Get data with bins
+    df_bins = get_data_with_bins()
+    
+    # Get PCA features
+    df_pca, pca_model = get_pca_features()
+    
+    # Note: In a real implementation, you would merge these datasets
+    # based on country matching. For demonstration, we'll return them separately.
+    
+    return {
+        'binned_features': df_bins,
+        'pca_features': df_pca,
+        'pca_model': pca_model
+    }
+
+def get_model_ready_data():
+    """Get final dataset ready for machine learning modeling"""
+    # Get encoded and cleaned data for modeling
+    df_model = load_encoded_dropped()
+    
+    # Add binned features
+    df_bins = get_data_with_bins()
+    
+    # Merge binned features with model data (using index)
+    bin_cols = [col for col in df_bins.columns if '_bin' in col or '_category' in col]
+    if bin_cols:
+        for col in bin_cols:
+            if col in df_bins.columns:
+                df_model[col] = df_bins[col]
+    
+    # Note: PCA features would require country-individual matching
+    # For now, we return individual-level features with bins
+    
+    return df_model
