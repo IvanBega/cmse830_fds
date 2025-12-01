@@ -12,7 +12,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from datasource import get_model_ready_data
 
-st.set_page_config(page_title="Model Development & Evaluation", page_icon="🤖")
+st.set_page_config(page_title="Model Development & Evaluation")
 
 st.title("Model Development & Evaluation")
 st.markdown("This page demonstrates machine learning model development, evaluation, and comparison for heart disease prediction.")
@@ -21,43 +21,58 @@ st.markdown("This page demonstrates machine learning model development, evaluati
 # SECTION 1: DATA PREPARATION
 # =============================================================================
 
-st.header("1. Data Preparation for Modeling")
+# Data sampling option
+st.subheader("Use Oversampling and Scaling?")
+use_oversampling = st.checkbox("Use SMOTE Oversampling to handle class imbalance", value=True)
+scale_features = st.checkbox("Apply StandardScaler", value=True)
 
-# Load modeling data
-df_model = get_model_ready_data()
+# Load modeling data with or without oversampling
+df_model = get_model_ready_data(use_oversampling=use_oversampling)
 
-st.subheader("1.1 Dataset Overview")
-st.write(f"**Dataset Shape:** {df_model.shape}")
+st.subheader("Dataset Stats for Machine Learning Model")
+st.write(f"**Shape:** {df_model.shape}")
 st.write(f"**Number of Features:** {len(df_model.columns) - 1}")  # Excluding target
-st.write(f"**Target Variable:** Heart Disease Status (encoded: 0=No, 1=Yes)")
+st.write(f"**Using Oversampling:** {'Yes' if use_oversampling else 'No'}")
 
 # Show target distribution
-st.subheader("1.2 Target Variable Distribution")
+st.subheader("Distribution of Heart Disease")
+if 'is_synthetic' in df_model.columns and use_oversampling:
+    # Show synthetic vs real data distribution
+    synthetic_counts = df_model['is_synthetic'].value_counts()
+    synthetic_percentages = (synthetic_counts / len(df_model) * 100).round(2)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Real Data", f"{synthetic_counts[0]}")
+    with col2:
+        st.metric("Synthetic Data", f"{synthetic_counts[1]}")
+    with col3:
+        st.metric("Total Samples", len(df_model))
+
 target_counts = df_model['Heart Disease Status_encoded'].value_counts()
 target_percentages = (target_counts / len(df_model) * 100).round(2)
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("No Heart Disease", f"{target_counts[0]}", f"{target_percentages[0]}%")
+    st.metric("No Heart Disease", f"{target_counts[0]}")
 with col2:
-    st.metric("Heart Disease", f"{target_counts[1]}", f"{target_percentages[1]}%")
+    st.metric("Heart Disease", f"{target_counts[1]}")
 with col3:
     imbalance_ratio = target_counts[0] / target_counts[1] if target_counts[1] > 0 else 0
-    st.metric("Class Imbalance Ratio", f"{imbalance_ratio:.2f}:1")
+    st.metric("Class Balance", f"{imbalance_ratio:.2f}:1" if not use_oversampling else "1:1 (Balanced)")
 
 # Feature selection
-st.subheader("1.3 Feature Selection")
+st.subheader("Which Features to Use?")
 
-# Select features for modeling (excluding target and synthetic data flag if present)
-exclude_cols = ['Heart Disease Status_encoded', 'is_synthetic']  # Exclude target and synthetic flag
+# Select features for modeling
+exclude_cols = ['Heart Disease Status_encoded', 'is_synthetic'] if 'is_synthetic' in df_model.columns else ['Heart Disease Status_encoded']
 feature_cols = [col for col in df_model.columns if col not in exclude_cols]
 
 # Let user select features
-st.write(f"**Available Features ({len(feature_cols)} total):**")
 selected_features = st.multiselect(
-    "Select features for modeling:",
+    "Features",
     options=feature_cols,
-    default=feature_cols[:min(10, len(feature_cols))]  # Default to first 10 features
+    default=[col for col in feature_cols if col not in ['Age_bin', 'BMI_category', 'BP_category']][:10]  # Default to first 10 non-binned features
 )
 
 # Prepare feature matrix X and target y
@@ -77,19 +92,49 @@ if len(selected_features) > 0:
     
     # Handle missing values
     if X.isnull().sum().sum() > 0:
-        st.warning(f"Dataset contains {X.isnull().sum().sum()} missing values. Using median imputation.")
         from sklearn.impute import SimpleImputer
         imputer = SimpleImputer(strategy='median')
         X = pd.DataFrame(imputer.fit_transform(X), columns=selected_features)
     
     # Train-test split
-    st.subheader("1.4 Train-Test Split")
+    st.subheader("Train-Test Split")
     test_size = st.slider("Select test set size:", 0.1, 0.4, 0.2, 0.05)
+    
+    # ADDED EXPLANATION: Test set size recommendation
+    st.write("**Test Set Size Recommendation:**")
+    st.write("""
+    The default test size of 20% (0.2) is a good balance for most datasets:
+    - **Increase test size** (e.g., to 30-40%) if you have a large dataset (>10,000 samples) and want more reliable performance estimates
+    - **Decrease test size** (e.g., to 10%) if you have a small dataset (<1,000 samples) to preserve more data for training
+    - The 80/20 split is a common standard that provides enough data for both training and reliable evaluation
+    """)
+    
     random_state = st.number_input("Random seed:", 0, 100, 42)
     
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
-    )
+    # For oversampled data, we need to ensure we don't split synthetic and real data together
+    if 'is_synthetic' in df_model.columns and use_oversampling:
+        # Separate real and synthetic data
+        real_data = df_model[df_model['is_synthetic'] == 0]
+        synthetic_data = df_model[df_model['is_synthetic'] == 1]
+        
+        # Split real data
+        X_real = real_data[selected_features]
+        y_real = real_data['Heart Disease Status_encoded']
+        X_train_real, X_test_real, y_train_real, y_test_real = train_test_split(
+            X_real, y_real, test_size=test_size, random_state=random_state, stratify=y_real
+        )
+        
+        # Add synthetic data to training only
+        X_train = pd.concat([X_train_real, synthetic_data[selected_features]])
+        y_train = pd.concat([y_train_real, synthetic_data['Heart Disease Status_encoded']])
+        X_test = X_test_real
+        y_test = y_test_real
+        
+    else:
+        # Regular train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state, stratify=y
+        )
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -97,13 +142,11 @@ if len(selected_features) > 0:
     with col2:
         st.metric("Test Samples", len(X_test))
     with col3:
-        st.metric("Training %", f"{(1-test_size)*100:.1f}%")
+        train_real = len(X_train) - (len(synthetic_data) if 'synthetic_data' in locals() else 0)
+        st.metric("Real Training Samples", train_real)
     with col4:
-        st.metric("Test %", f"{test_size*100:.1f}%")
-    
-    # Feature scaling
-    st.subheader("1.5 Feature Scaling")
-    scale_features = st.checkbox("Apply feature scaling (StandardScaler)", value=True)
+        if use_oversampling and 'synthetic_data' in locals():
+            st.metric("Synthetic Training Samples", len(synthetic_data))
     
     if scale_features:
         scaler = StandardScaler()
@@ -111,27 +154,32 @@ if len(selected_features) > 0:
         X_test_scaled = scaler.transform(X_test)
         X_train_final = pd.DataFrame(X_train_scaled, columns=selected_features)
         X_test_final = pd.DataFrame(X_test_scaled, columns=selected_features)
-        st.success("Features scaled using StandardScaler (zero mean, unit variance)")
+
     else:
         X_train_final = X_train
         X_test_final = X_test
-        st.info("Using original feature scales")
     
     # =============================================================================
     # SECTION 2: MODEL 1 - LOGISTIC REGRESSION
     # =============================================================================
     
-    st.header("2. Model 1: Logistic Regression")
+    st.header("Model 1: Logistic Regression")
     
-    st.markdown("""
-    **Logistic Regression** is a linear model for binary classification that:
-    - Models the probability of class membership
-    - Provides interpretable coefficients
-    - Works well with linearly separable data
+    # ADDED EXPLANATION: What is Logistic Regression
+    st.write("""
+    **What is Logistic Regression?**
+    Logistic Regression is a statistical model used for binary classification problems (like predicting heart disease yes/no). 
+    Unlike linear regression which predicts continuous values, logistic regression predicts the probability of an outcome 
+    using a sigmoid function that outputs values between 0 and 1. It's interpretable because each feature has a coefficient 
+    showing its relationship with the outcome - positive coefficients increase disease risk, negative coefficients decrease it.
+    """)
+    
+    st.markdown(f"""
+    **Using {'oversampled' if use_oversampling else 'original'} data.
     """)
     
     # Model training
-    st.subheader("2.1 Model Training")
+    st.subheader("Model Training Parameters")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -147,7 +195,8 @@ if len(selected_features) > 0:
         max_iter=max_iter,
         penalty=penalty_type,
         solver='saga' if penalty_type == 'elasticnet' else 'liblinear',
-        random_state=random_state
+        random_state=random_state,
+        class_weight='balanced' if not use_oversampling else None  # Use class_weight only if not oversampled
     )
     
     lr_model.fit(X_train_final, y_train)
@@ -157,10 +206,35 @@ if len(selected_features) > 0:
     y_test_pred = lr_model.predict(X_test_final)
     y_test_prob = lr_model.predict_proba(X_test_final)[:, 1]
     
-    st.success(f"Logistic Regression model trained successfully!")
+    st.write("""
+    **Regularization (C):**
+    Controls overfitting by penalizing large coefficients. 
+    - **Lower C** (e.g., 0.01): Strong regularization, simpler model, less overfitting
+    - **Higher C** (e.g., 10.0): Weak regularization, more complex model, risk of overfitting
+    - **Default (1.0)**: Balanced approach
+    """)
+    
+    st.write("""
+    **Max Iterations:**
+    Maximum number of iterations for the solver to converge.
+    - **Too low**: Model may not converge (warning message appears)
+    - **Too high**: Unnecessary computation time
+    - **Default (200)**: Usually sufficient for most datasets
+    Increase if you see "ConvergenceWarning" in the output.
+    """)
+    
+    
+    st.write("""
+    **Penalty Type:**         
+    Type of regularization to apply:
+    - **L2 (Ridge)**: Penalizes squared coefficients. Tends to keep all features with smaller coefficients.
+    - **L1 (Lasso)**: Penalizes absolute coefficients. Can shrink some coefficients to zero (feature selection).
+    - **ElasticNet**: Combines L1 and L2 penalties. Best of both worlds but slower.
+    For interpretability with feature selection, try L1. For general use, L2 is standard.
+    """)
     
     # Model coefficients
-    st.subheader("2.2 Feature Importance (Coefficients)")
+    st.subheader("Feature Importance (Coefficients)")
     coefficients = pd.DataFrame({
         'Feature': selected_features,
         'Coefficient': lr_model.coef_[0],
@@ -184,33 +258,43 @@ if len(selected_features) > 0:
     # SECTION 3: MODEL 2 - DECISION TREE
     # =============================================================================
     
-    st.header("3. Model 2: Decision Tree Classifier")
+    st.header("Model 2: Decision Tree Classifier")
     
-    st.markdown("""
-    **Decision Tree** is a non-linear model that:
-    - Creates a tree-like structure of decisions
-    - Handles non-linear relationships
-    - Provides feature importance scores
-    - Easy to interpret and visualize
+    # ADDED EXPLANATION: What is a Decision Tree and split criteria
+    st.write("""
+    **What is a Decision Tree?**
+    A Decision Tree is a non-linear model that makes predictions by learning simple decision rules from data features.
+    It works by repeatedly splitting the data into subsets based on feature values, creating a tree-like structure.
+    Each internal node represents a "test" on a feature, each branch represents the outcome, and each leaf node represents a prediction.
+    
+    **Split Criteria - Gini vs Entropy:**
+    - **Gini Impurity**: Measures how often a randomly chosen element would be incorrectly classified. Faster to compute, default in sklearn.
+    - **Entropy (Information Gain)**: Measures the amount of information or uncertainty. Tends to create more balanced trees.
+    Both usually give similar results, but Gini is slightly faster computationally.
+    """)
+    
+    st.markdown(f"""
+    **Using {'oversampled' if use_oversampling else 'original'} data.
     """)
     
     # Model training
-    st.subheader("3.1 Model Training")
+    st.subheader("Model Training Parameters")
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        max_depth = st.slider("Max tree depth:", 1, 20, 5)
+        max_depth = st.slider("Max tree depth:", 1, 20, 5, key="dt_depth")
     with col2:
-        min_samples_split = st.slider("Min samples to split:", 2, 20, 2)
+        min_samples_split = st.slider("Min samples to split:", 2, 20, 2, key="dt_split")
     with col3:
-        criterion = st.selectbox("Split criterion:", ['gini', 'entropy'])
+        criterion = st.selectbox("Split criterion:", ['gini', 'entropy'], key="dt_criterion")
     
     # Train model
     dt_model = DecisionTreeClassifier(
         max_depth=max_depth,
         min_samples_split=min_samples_split,
         criterion=criterion,
-        random_state=random_state
+        random_state=random_state,
+        class_weight='balanced' if not use_oversampling else None  # Use class_weight only if not oversampled
     )
     
     dt_model.fit(X_train_final, y_train)
@@ -223,7 +307,7 @@ if len(selected_features) > 0:
     st.success(f"Decision Tree model trained successfully!")
     
     # Feature importance
-    st.subheader("3.2 Feature Importance")
+    st.subheader("Feature Importance")
     importance_df = pd.DataFrame({
         'Feature': selected_features,
         'Importance': dt_model.feature_importances_
@@ -243,7 +327,7 @@ if len(selected_features) > 0:
     # SECTION 4: MODEL EVALUATION & COMPARISON
     # =============================================================================
     
-    st.header("4. Model Evaluation & Comparison")
+    st.header("Model Evaluation & Comparison")
     
     # Calculate metrics for both models
     def calculate_metrics(y_true, y_pred, y_prob, model_name):
@@ -263,11 +347,11 @@ if len(selected_features) > 0:
     # Create comparison dataframe
     metrics_df = pd.DataFrame([lr_metrics, dt_metrics])
     
-    st.subheader("4.1 Performance Metrics Comparison")
+    st.subheader("Performance Metrics Comparison")
     st.dataframe(metrics_df.round(4))
     
     # Visual comparison
-    st.subheader("4.2 Visual Comparison")
+    st.subheader("Visual Comparison")
     
     # Bar chart comparison
     metrics_to_plot = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
@@ -289,7 +373,19 @@ if len(selected_features) > 0:
     st.pyplot(fig)
     
     # Confusion matrices
-    st.subheader("4.3 Confusion Matrices")
+    st.subheader("Confusion Matrices")
+    
+    # ADDED EXPLANATION: What is a Confusion Matrix
+    st.write("""
+    **What is a Confusion Matrix?**
+    A confusion matrix is a table that shows how well a classification model performs on test data. It compares:
+    - **True Positives (TP)**: Correctly predicted heart disease cases (top-right)
+    - **True Negatives (TN)**: Correctly predicted no disease cases (top-left)
+    - **False Positives (FP)**: Incorrectly predicted as disease (bottom-left, Type I error)
+    - **False Negatives (FN)**: Missed heart disease cases (top-right, Type II error)
+    
+    In healthcare, false negatives (missing heart disease) are often more serious than false positives.
+    """)
     
     col1, col2 = st.columns(2)
     
@@ -318,7 +414,21 @@ if len(selected_features) > 0:
         st.pyplot(fig)
     
     # ROC Curves
-    st.subheader("4.4 ROC Curves Comparison")
+    st.subheader("ROC Curves Comparison")
+    
+    # ADDED EXPLANATION: What is a ROC Curve
+    st.write("""
+    **What is a ROC Curve?**
+    ROC (Receiver Operating Characteristic) Curve shows the diagnostic ability of a binary classifier as its discrimination threshold is varied.
+    - **X-axis**: False Positive Rate (1 - Specificity) - how many healthy people are incorrectly flagged
+    - **Y-axis**: True Positive Rate (Sensitivity/Recall) - how many sick people are correctly identified
+    - **AUC (Area Under Curve)**: Measures overall performance. Higher is better:
+      * 0.5 = Random guessing (diagonal line)
+      * 0.7-0.8 = Acceptable
+      * 0.8-0.9 = Excellent
+      * >0.9 = Outstanding
+    The curve shows the trade-off between sensitivity and specificity at different threshold levels.
+    """)
     
     # Calculate ROC curves
     fpr_lr, tpr_lr, _ = roc_curve(y_test, y_test_prob)
@@ -341,14 +451,71 @@ if len(selected_features) > 0:
     st.pyplot(fig)
     
     # =============================================================================
-    # SECTION 5: CROSS-VALIDATION & MODEL SELECTION
+    # SECTION 5: OVERSAMPLING IMPACT ANALYSIS
     # =============================================================================
     
-    st.header("5. Cross-Validation & Model Selection")
+    if use_oversampling:
+        st.header("Oversampling Impact Analysis")
+        
+        st.markdown("""
+        ### **Impact of SMOTE Oversampling:**
+        
+        **Benefits:**
+        - ✅ Balanced classes (1:1 ratio)
+        - ✅ Better representation of minority class
+        - ✅ Reduced model bias toward majority class
+        - ✅ Improved recall for heart disease detection
+        
+        **Considerations:**
+        - ⚠️ Synthetic data may not perfectly represent real-world patterns
+        - ⚠️ Test set contains only real data for fair evaluation
+        - ⚠️ Potential overfitting to synthetic patterns
+        
+        **Current Implementation:**
+        - Synthetic data used **only in training**
+        - Test set contains **100% real data**
+        - This ensures fair evaluation of model generalization
+        """)
+        
+        # Compare with hypothetical no-oversampling scenario
+        st.subheader("Class Balance Comparison")
+        
+        fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+        
+        # Before oversampling (estimated)
+        before_counts = [target_counts.sum() * 0.85, target_counts.sum() * 0.15]  # Estimated 85:15 split
+        ax[0].pie(before_counts, labels=['No Disease', 'Disease'], autopct='%1.1f%%',
+                 colors=['lightblue', 'lightcoral'])
+        ax[0].set_title('Estimated Distribution\n(Before Oversampling)')
+        
+        # After oversampling
+        ax[1].pie([target_counts[0], target_counts[1]], labels=['No Disease', 'Disease'], 
+                 autopct='%1.1f%%', colors=['lightblue', 'lightcoral'])
+        ax[1].set_title('Actual Distribution\n(After Oversampling)')
+        
+        st.pyplot(fig)
     
-    st.subheader("5.1 Cross-Validation Results")
+    # =============================================================================
+    # SECTION 6: CROSS-VALIDATION & MODEL SELECTION
+    # =============================================================================
     
-    cv_folds = st.slider("Number of CV folds:", 3, 10, 5)
+    st.header("Cross-Validation & Model Selection")
+    
+    st.subheader("Cross-Validation Results")
+    
+    cv_folds = st.slider("Number of CV folds:", 3, 10, 5, key="cv_folds")
+    
+    # For oversampled data, we need special cross-validation
+    if use_oversampling:
+        
+        
+        # Use only real data for cross-validation
+        if 'real_data' in locals():
+            X_cv = real_data[selected_features]
+            y_cv = real_data['Heart Disease Status_encoded']
+        else:
+            X_cv = X
+            y_cv = y
     
     # Perform cross-validation
     lr_cv_scores = cross_val_score(lr_model, X_train_final, y_train, 
@@ -376,160 +543,3 @@ if len(selected_features) > 0:
     
     st.write("**Cross-Validation Summary:**")
     st.dataframe(cv_summary.round(4))
-    
-    # Visualize CV results
-    fig, ax = plt.subplots(figsize=(10, 5))
-    x_pos = np.arange(cv_folds)
-    width = 0.35
-    
-    ax.bar(x_pos - width/2, lr_cv_scores, width, label='Logistic Regression', 
-           color='blue', alpha=0.7)
-    ax.bar(x_pos + width/2, dt_cv_scores, width, label='Decision Tree', 
-           color='green', alpha=0.7)
-    ax.set_xlabel('Fold')
-    ax.set_ylabel('Accuracy')
-    ax.set_title('Cross-Validation Accuracy by Fold')
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels([f'Fold {i+1}' for i in range(cv_folds)])
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    st.pyplot(fig)
-    
-    # Model selection recommendation
-    st.subheader("5.2 Model Selection Recommendation")
-    
-    # Determine best model
-    if roc_auc_lr > roc_auc_dt:
-        best_model = "Logistic Regression"
-        best_auc = roc_auc_lr
-        reason = "Higher ROC-AUC score indicates better overall performance"
-    else:
-        best_model = "Decision Tree"
-        best_auc = roc_auc_dt
-        reason = "Higher ROC-AUC score indicates better overall performance"
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Recommended Model", best_model)
-    with col2:
-        st.metric("Best ROC-AUC", f"{best_auc:.4f}")
-    
-    st.markdown(f"""
-    **Recommendation Rationale:**
-    - **{best_model}** is recommended based on ROC-AUC score ({best_auc:.4f})
-    - **Reason:** {reason}
-    - **Considerations for Healthcare Applications:**
-      * **Interpretability:** Logistic Regression provides clear coefficients
-      * **Non-linearity:** Decision Tree captures complex relationships
-      * **Clinical Use:** Consider precision (avoid false positives) or recall (avoid false negatives) based on clinical priorities
-    """)
-    
-    # =============================================================================
-    # SECTION 6: MODEL DEPLOYMENT PREPARATION
-    # =============================================================================
-    
-    st.header("6. Model Deployment Preparation")
-    
-    st.subheader("6.1 Final Model Performance")
-    
-    # Show final test performance of selected model
-    if best_model == "Logistic Regression":
-        final_y_pred = y_test_pred
-        final_y_prob = y_test_prob
-        final_model = lr_model
-    else:
-        final_y_pred = y_test_pred_dt
-        final_y_prob = y_test_prob_dt
-        final_model = dt_model
-    
-    # Detailed classification report
-    st.write("**Detailed Classification Report:**")
-    class_report = classification_report(y_test, final_y_pred, output_dict=True)
-    class_report_df = pd.DataFrame(class_report).transpose()
-    st.dataframe(class_report_df.round(4))
-    
-    # Feature importance for deployment
-    st.subheader("6.2 Key Features for Prediction")
-    
-    if best_model == "Logistic Regression":
-        # Show top coefficients
-        top_features = coefficients.sort_values('Absolute Value', ascending=False).head(5)
-        st.write("**Top 5 Most Important Features (by coefficient magnitude):**")
-        for idx, row in top_features.iterrows():
-            direction = "increases" if row['Coefficient'] > 0 else "decreases"
-            st.write(f"- **{row['Feature']}**: Coefficient = {row['Coefficient']:.4f} ({direction} heart disease risk)")
-    else:
-        # Show top feature importances
-        top_features = importance_df.head(5)
-        st.write("**Top 5 Most Important Features (by importance score):**")
-        for idx, row in top_features.iterrows():
-            st.write(f"- **{row['Feature']}**: Importance = {row['Importance']:.4f}")
-    
-    # Deployment considerations
-    st.subheader("6.3 Deployment Considerations")
-    
-    st.markdown("""
-    **For Production Deployment:**
-    
-    1. **Model Persistence:** Save the trained model and scaler using joblib or pickle
-    2. **API Development:** Create REST API for real-time predictions
-    3. **Monitoring:** Track model drift and performance degradation
-    4. **Retraining:** Schedule periodic retraining with new data
-    5. **Ethical Considerations:** Ensure model fairness across different demographic groups
-    
-    **Clinical Integration:**
-    - Integrate with electronic health record (EHR) systems
-    - Provide confidence scores alongside predictions
-    - Include model limitations and assumptions in documentation
-    - Ensure compliance with healthcare regulations (HIPAA, GDPR)
-    """)
-    
-else:
-    st.error("Please select at least one feature for modeling.")
-
-# =============================================================================
-# SECTION 7: NEXT STEPS & CONCLUSION
-# =============================================================================
-
-st.header("7. Conclusion & Next Steps")
-
-st.markdown("""
-### **Summary of Findings:**
-
-#### **Model Performance:**
-- Both Logistic Regression and Decision Tree models were successfully trained
-- Performance metrics were calculated and compared
-- Cross-validation was performed to ensure model stability
-- ROC-AUC analysis provided insights into model discrimination ability
-
-#### **Key Insights:**
-1. **Feature Importance:** Identified the most predictive features for heart disease
-2. **Model Trade-offs:** Understood the interpretability vs. performance trade-off
-3. **Validation:** Demonstrated robust validation techniques to prevent overfitting
-
-### **Next Steps for Improvement:**
-
-#### **1. Advanced Modeling Techniques:**
-- Ensemble methods (Random Forest, Gradient Boosting)
-- Neural networks for complex pattern recognition
-- Hyperparameter tuning with GridSearchCV or RandomizedSearchCV
-
-#### **2. Feature Engineering Enhancement:**
-- Incorporate country-level PCA features
-- Create interaction terms between clinical and socioeconomic factors
-- Implement more sophisticated feature selection techniques
-
-#### **3. Clinical Validation:**
-- Validate model on external datasets
-- Conduct clinical trials to assess real-world impact
-- Collaborate with healthcare professionals for domain-specific insights
-
-#### **4. Deployment Pipeline:**
-- Build automated ML pipeline (MLOps)
-- Implement model monitoring and alerting systems
-- Develop user-friendly interfaces for clinicians
-
-### **Final Recommendation:**
-Based on this analysis, proceed with **{best_model}** for initial deployment due to its superior ROC-AUC performance. 
-However, continue exploring ensemble methods that might combine the strengths of both linear and non-linear approaches.
-""")

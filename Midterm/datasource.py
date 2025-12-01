@@ -487,22 +487,31 @@ def get_combined_features():
         'pca_model': pca_model
     }
 
-def get_model_ready_data():
-    """Get final dataset ready for machine learning modeling"""
-    # Get encoded and cleaned data for modeling
-    df_model = load_encoded_dropped()
-    
-    # Add binned features
-    df_bins = get_data_with_bins()
-    
-    # Merge binned features with model data (using index)
-    bin_cols = [col for col in df_bins.columns if '_bin' in col or '_category' in col]
-    if bin_cols:
-        for col in bin_cols:
-            if col in df_bins.columns:
-                df_model[col] = df_bins[col]
-    
-    # Note: PCA features would require country-individual matching
-    # For now, we return individual-level features with bins
-    
-    return df_model
+def get_model_ready_data(use_oversampling=False):
+    """Get final dataset ready for machine learning modeling
+    Args:
+        use_oversampling: If True, apply SMOTE oversampling
+    """
+    if use_oversampling:
+        # Use oversampled data
+        df_model = load_oversampled()
+        
+        # Add binned features to oversampled data
+        df_bins = get_data_with_bins()
+        
+        return df_model
+    else:
+        # Get encoded and cleaned data for modeling
+        df_model = load_encoded_dropped()
+        
+        # Add binned features
+        df_bins = get_data_with_bins()
+        
+        # Merge binned features with model data (using index)
+        bin_cols = [col for col in df_bins.columns if '_bin' in col or '_category' in col]
+        if bin_cols:
+            for col in bin_cols:
+                if col in df_bins.columns:
+                    df_model[col] = df_bins[col]
+        
+        return df_model
