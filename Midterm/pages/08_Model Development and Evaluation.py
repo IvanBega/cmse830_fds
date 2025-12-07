@@ -18,16 +18,150 @@ st.title("Model Development & Evaluation")
 st.markdown("This page demonstrates machine learning model development, evaluation, and comparison for heart disease prediction.")
 
 # =============================================================================
+# CACHING AND SESSION STATE SETUP
+# =============================================================================
+
+# Initialize session state variables if they don't exist
+if 'use_oversampling' not in st.session_state:
+    st.session_state.use_oversampling = True
+if 'scale_features' not in st.session_state:
+    st.session_state.scale_features = True
+if 'selected_features' not in st.session_state:
+    st.session_state.selected_features = None
+if 'test_size' not in st.session_state:
+    st.session_state.test_size = 0.2
+if 'random_state' not in st.session_state:
+    st.session_state.random_state = 42
+if 'lr_params' not in st.session_state:
+    st.session_state.lr_params = {'C': 1.0, 'max_iter': 200, 'penalty': 'l2'}
+if 'dt_params' not in st.session_state:
+    st.session_state.dt_params = {'max_depth': 5, 'min_samples_split': 2, 'criterion': 'gini'}
+if 'cv_folds' not in st.session_state:
+    st.session_state.cv_folds = 5
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
+if 'models_trained' not in st.session_state:
+    st.session_state.models_trained = False
+
+# Cache expensive data loading operations
+@st.cache_data(ttl=3600, show_spinner=True)
+def load_cached_model_data(use_oversampling):
+    """Cache the model data loading to avoid reloading on every interaction"""
+    return get_model_ready_data(use_oversampling=use_oversampling)
+
+@st.cache_data(ttl=3600, show_spinner=True)
+def cache_train_test_split(_df, features, test_size, random_state, use_oversampling):
+    """Cache the train-test split results"""
+    X = _df[features]
+    y = _df['Heart Disease Status_encoded']
+    
+    # Handle missing values
+    if X.isnull().sum().sum() > 0:
+        from sklearn.impute import SimpleImputer
+        imputer = SimpleImputer(strategy='median')
+        X = pd.DataFrame(imputer.fit_transform(X), columns=features)
+    
+    # For oversampled data, handle special split
+    if 'is_synthetic' in _df.columns and use_oversampling:
+        real_data = _df[_df['is_synthetic'] == 0]
+        synthetic_data = _df[_df['is_synthetic'] == 1]
+        
+        X_real = real_data[features]
+        y_real = real_data['Heart Disease Status_encoded']
+        X_train_real, X_test_real, y_train_real, y_test_real = train_test_split(
+            X_real, y_real, test_size=test_size, random_state=random_state, stratify=y_real
+        )
+        
+        X_train = pd.concat([X_train_real, synthetic_data[features]])
+        y_train = pd.concat([y_train_real, synthetic_data['Heart Disease Status_encoded']])
+        X_test = X_test_real
+        y_test = y_test_real
+        
+        synthetic_info = {
+            'synthetic_data': synthetic_data,
+            'real_data': real_data
+        }
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state, stratify=y
+        )
+        synthetic_info = {}
+    
+    return X_train, X_test, y_train, y_test, synthetic_info
+
+@st.cache_data(ttl=3600, show_spinner=True)
+def cache_scaled_data(X_train, X_test, features, scale_features):
+    """Cache the scaling operation"""
+    if scale_features:
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        X_train_final = pd.DataFrame(X_train_scaled, columns=features)
+        X_test_final = pd.DataFrame(X_test_scaled, columns=features)
+        return X_train_final, X_test_final, scaler
+    else:
+        return X_train, X_test, None
+
+@st.cache_resource(ttl=3600, show_spinner=True)
+def cache_lr_model(X_train, y_train, C, max_iter, penalty, random_state, use_oversampling):
+    """Cache the trained Logistic Regression model"""
+    lr_model = LogisticRegression(
+        C=C,
+        max_iter=max_iter,
+        penalty=penalty,
+        solver='saga' if penalty == 'elasticnet' else 'liblinear',
+        random_state=random_state,
+        class_weight='balanced' if not use_oversampling else None
+    )
+    lr_model.fit(X_train, y_train)
+    return lr_model
+
+@st.cache_resource(ttl=3600, show_spinner=True)
+def cache_dt_model(X_train, y_train, max_depth, min_samples_split, criterion, random_state, use_oversampling):
+    """Cache the trained Decision Tree model"""
+    dt_model = DecisionTreeClassifier(
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        criterion=criterion,
+        random_state=random_state,
+        class_weight='balanced' if not use_oversampling else None
+    )
+    dt_model.fit(X_train, y_train)
+    return dt_model
+
+@st.cache_data(ttl=3600, show_spinner=True)
+def cache_cross_val_scores(_model, X_train, y_train, cv_folds):
+    """Cache cross-validation results"""
+    return cross_val_score(_model, X_train, y_train, cv=cv_folds, scoring='accuracy')
+
+# =============================================================================
 # SECTION 1: DATA PREPARATION
 # =============================================================================
 
-# Data sampling option
+# Data sampling option - use session state for persistence
 st.subheader("Use Oversampling and Scaling?")
-use_oversampling = st.checkbox("Use SMOTE Oversampling to handle class imbalance", value=True)
-scale_features = st.checkbox("Apply StandardScaler", value=True)
 
-# Load modeling data with or without oversampling
-df_model = get_model_ready_data(use_oversampling=use_oversampling)
+col1, col2 = st.columns(2)
+with col1:
+    use_oversampling = st.checkbox(
+        "Use SMOTE Oversampling to handle class imbalance", 
+        value=st.session_state.use_oversampling,
+        key='oversampling_checkbox'
+    )
+    st.session_state.use_oversampling = use_oversampling
+
+with col2:
+    scale_features = st.checkbox(
+        "Apply StandardScaler", 
+        value=st.session_state.scale_features,
+        key='scaling_checkbox'
+    )
+    st.session_state.scale_features = scale_features
+
+# Load modeling data with caching
+with st.spinner('Loading data...'):
+    df_model = load_cached_model_data(use_oversampling)
+    st.session_state.data_loaded = True
 
 st.subheader("Dataset Stats for Machine Learning Model")
 st.write(f"**Shape:** {df_model.shape}")
@@ -68,37 +202,43 @@ st.subheader("Which Features to Use?")
 exclude_cols = ['Heart Disease Status_encoded', 'is_synthetic'] if 'is_synthetic' in df_model.columns else ['Heart Disease Status_encoded']
 feature_cols = [col for col in df_model.columns if col not in exclude_cols]
 
+# Use session state to remember selected features
+default_features = [col for col in feature_cols if col not in ['Age_bin', 'BMI_category', 'BP_category']][:10]
+if st.session_state.selected_features is None:
+    st.session_state.selected_features = default_features
+
 # Let user select features
 selected_features = st.multiselect(
     "Features",
     options=feature_cols,
-    default=[col for col in feature_cols if col not in ['Age_bin', 'BMI_category', 'BP_category']][:10]  # Default to first 10 non-binned features
+    default=st.session_state.selected_features,
+    key='features_multiselect'
 )
+st.session_state.selected_features = selected_features
 
 # Prepare feature matrix X and target y
 if len(selected_features) > 0:
-    X = df_model[selected_features]
-    y = df_model['Heart Disease Status_encoded']
-    
     # Show feature information
     st.write(f"**Selected {len(selected_features)} features:**")
     feature_info = pd.DataFrame({
         'Feature': selected_features,
         'Type': ['Categorical' if '_encoded' in col or '_bin' in col or '_category' in col else 'Numerical' for col in selected_features],
-        'Missing Values': X.isnull().sum().values,
-        'Unique Values': [X[col].nunique() for col in selected_features]
+        'Missing Values': df_model[selected_features].isnull().sum().values,
+        'Unique Values': [df_model[col].nunique() for col in selected_features]
     })
     st.dataframe(feature_info)
     
-    # Handle missing values
-    if X.isnull().sum().sum() > 0:
-        from sklearn.impute import SimpleImputer
-        imputer = SimpleImputer(strategy='median')
-        X = pd.DataFrame(imputer.fit_transform(X), columns=selected_features)
-    
-    # Train-test split
+    # Train-test split with caching
     st.subheader("Train-Test Split")
-    test_size = st.slider("Select test set size:", 0.1, 0.4, 0.2, 0.05)
+    
+    test_size = st.slider(
+        "Select test set size:", 
+        0.1, 0.4, 
+        st.session_state.test_size, 
+        0.05,
+        key='test_size_slider'
+    )
+    st.session_state.test_size = test_size
     
     # ADDED EXPLANATION: Test set size recommendation
     st.write("**Test Set Size Recommendation:**")
@@ -109,31 +249,18 @@ if len(selected_features) > 0:
     - The 80/20 split is a common standard that provides enough data for both training and reliable evaluation
     """)
     
-    random_state = st.number_input("Random seed:", 0, 100, 42)
+    random_state = st.number_input(
+        "Random seed:", 
+        0, 100, 
+        st.session_state.random_state,
+        key='random_state_input'
+    )
+    st.session_state.random_state = random_state
     
-    # For oversampled data, we need to ensure we don't split synthetic and real data together
-    if 'is_synthetic' in df_model.columns and use_oversampling:
-        # Separate real and synthetic data
-        real_data = df_model[df_model['is_synthetic'] == 0]
-        synthetic_data = df_model[df_model['is_synthetic'] == 1]
-        
-        # Split real data
-        X_real = real_data[selected_features]
-        y_real = real_data['Heart Disease Status_encoded']
-        X_train_real, X_test_real, y_train_real, y_test_real = train_test_split(
-            X_real, y_real, test_size=test_size, random_state=random_state, stratify=y_real
-        )
-        
-        # Add synthetic data to training only
-        X_train = pd.concat([X_train_real, synthetic_data[selected_features]])
-        y_train = pd.concat([y_train_real, synthetic_data['Heart Disease Status_encoded']])
-        X_test = X_test_real
-        y_test = y_test_real
-        
-    else:
-        # Regular train-test split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y
+    # Cache the train-test split
+    with st.spinner('Splitting data into train/test sets...'):
+        X_train, X_test, y_train, y_test, synthetic_info = cache_train_test_split(
+            df_model, selected_features, test_size, random_state, use_oversampling
         )
     
     col1, col2, col3, col4 = st.columns(4)
@@ -142,22 +269,17 @@ if len(selected_features) > 0:
     with col2:
         st.metric("Test Samples", len(X_test))
     with col3:
-        train_real = len(X_train) - (len(synthetic_data) if 'synthetic_data' in locals() else 0)
+        train_real = len(X_train) - (len(synthetic_info.get('synthetic_data', [])) if 'synthetic_data' in synthetic_info else 0)
         st.metric("Real Training Samples", train_real)
     with col4:
-        if use_oversampling and 'synthetic_data' in locals():
-            st.metric("Synthetic Training Samples", len(synthetic_data))
+        if use_oversampling and 'synthetic_data' in synthetic_info:
+            st.metric("Synthetic Training Samples", len(synthetic_info['synthetic_data']))
     
-    if scale_features:
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        X_train_final = pd.DataFrame(X_train_scaled, columns=selected_features)
-        X_test_final = pd.DataFrame(X_test_scaled, columns=selected_features)
-
-    else:
-        X_train_final = X_train
-        X_test_final = X_test
+    # Cache scaling operation
+    with st.spinner('Scaling features...' if scale_features else 'Preparing features...'):
+        X_train_final, X_test_final, _ = cache_scaled_data(
+            X_train, X_test, selected_features, scale_features
+        )
     
     # =============================================================================
     # SECTION 2: MODEL 1 - LOGISTIC REGRESSION
@@ -183,29 +305,45 @@ if len(selected_features) > 0:
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        C_value = st.number_input("Regularization (C):", 0.01, 10.0, 1.0, 0.1)
+        C_value = st.number_input(
+            "Regularization (C):", 
+            0.01, 10.0, 
+            st.session_state.lr_params['C'], 
+            0.1,
+            key='C_value_input'
+        )
+        st.session_state.lr_params['C'] = C_value
     with col2:
-        max_iter = st.number_input("Max iterations:", 100, 1000, 200, 50)
+        max_iter = st.number_input(
+            "Max iterations:", 
+            100, 1000, 
+            st.session_state.lr_params['max_iter'], 
+            50,
+            key='max_iter_input'
+        )
+        st.session_state.lr_params['max_iter'] = max_iter
     with col3:
-        penalty_type = st.selectbox("Penalty:", ['l2', 'l1', 'elasticnet'])
+        penalty_type = st.selectbox(
+            "Penalty:", 
+            ['l2', 'l1', 'elasticnet'],
+            index=['l2', 'l1', 'elasticnet'].index(st.session_state.lr_params['penalty']),
+            key='penalty_selectbox'
+        )
+        st.session_state.lr_params['penalty'] = penalty_type
     
-    # Train model
-    lr_model = LogisticRegression(
-        C=C_value,
-        max_iter=max_iter,
-        penalty=penalty_type,
-        solver='saga' if penalty_type == 'elasticnet' else 'liblinear',
-        random_state=random_state,
-        class_weight='balanced' if not use_oversampling else None  # Use class_weight only if not oversampled
-    )
-    
-    lr_model.fit(X_train_final, y_train)
+    # Cache the trained model
+    with st.spinner('Training Logistic Regression model...'):
+        lr_model = cache_lr_model(
+            X_train_final, y_train, C_value, max_iter, penalty_type, 
+            random_state, use_oversampling
+        )
     
     # Predictions
     y_train_pred = lr_model.predict(X_train_final)
     y_test_pred = lr_model.predict(X_test_final)
     y_test_prob = lr_model.predict_proba(X_test_final)[:, 1]
     
+    # Add parameter explanations
     st.write("""
     **Regularization (C):**
     Controls overfitting by penalizing large coefficients. 
@@ -222,7 +360,6 @@ if len(selected_features) > 0:
     - **Default (200)**: Usually sufficient for most datasets
     Increase if you see "ConvergenceWarning" in the output.
     """)
-    
     
     st.write("""
     **Penalty Type:**         
@@ -282,29 +419,43 @@ if len(selected_features) > 0:
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        max_depth = st.slider("Max tree depth:", 1, 20, 5, key="dt_depth")
+        max_depth = st.slider(
+            "Max tree depth:", 
+            1, 20, 
+            st.session_state.dt_params['max_depth'], 
+            key="dt_depth_slider"
+        )
+        st.session_state.dt_params['max_depth'] = max_depth
     with col2:
-        min_samples_split = st.slider("Min samples to split:", 2, 20, 2, key="dt_split")
+        min_samples_split = st.slider(
+            "Min samples to split:", 
+            2, 20, 
+            st.session_state.dt_params['min_samples_split'], 
+            key="dt_split_slider"
+        )
+        st.session_state.dt_params['min_samples_split'] = min_samples_split
     with col3:
-        criterion = st.selectbox("Split criterion:", ['gini', 'entropy'], key="dt_criterion")
+        criterion = st.selectbox(
+            "Split criterion:", 
+            ['gini', 'entropy'],
+            index=['gini', 'entropy'].index(st.session_state.dt_params['criterion']),
+            key="dt_criterion_selectbox"
+        )
+        st.session_state.dt_params['criterion'] = criterion
     
-    # Train model
-    dt_model = DecisionTreeClassifier(
-        max_depth=max_depth,
-        min_samples_split=min_samples_split,
-        criterion=criterion,
-        random_state=random_state,
-        class_weight='balanced' if not use_oversampling else None  # Use class_weight only if not oversampled
-    )
-    
-    dt_model.fit(X_train_final, y_train)
+    # Cache the trained model
+    with st.spinner('Training Decision Tree model...'):
+        dt_model = cache_dt_model(
+            X_train_final, y_train, max_depth, min_samples_split, 
+            criterion, random_state, use_oversampling
+        )
     
     # Predictions
     y_train_pred_dt = dt_model.predict(X_train_final)
     y_test_pred_dt = dt_model.predict(X_test_final)
     y_test_prob_dt = dt_model.predict_proba(X_test_final)[:, 1]
     
-    st.success(f"Decision Tree model trained successfully!")
+    st.session_state.models_trained = True
     
     # Feature importance
     st.subheader("Feature Importance")
@@ -482,25 +633,18 @@ if len(selected_features) > 0:
     
     st.subheader("Cross-Validation Results")
     
-    cv_folds = st.slider("Number of CV folds:", 3, 10, 5, key="cv_folds")
+    cv_folds = st.slider(
+        "Number of CV folds:", 
+        3, 10, 
+        st.session_state.cv_folds,
+        key="cv_folds_slider"
+    )
+    st.session_state.cv_folds = cv_folds
     
-    # For oversampled data, we need special cross-validation
-    if use_oversampling:
-        
-        
-        # Use only real data for cross-validation
-        if 'real_data' in locals():
-            X_cv = real_data[selected_features]
-            y_cv = real_data['Heart Disease Status_encoded']
-        else:
-            X_cv = X
-            y_cv = y
-    
-    # Perform cross-validation
-    lr_cv_scores = cross_val_score(lr_model, X_train_final, y_train, 
-                                  cv=cv_folds, scoring='accuracy')
-    dt_cv_scores = cross_val_score(dt_model, X_train_final, y_train, 
-                                  cv=cv_folds, scoring='accuracy')
+    # Cache cross-validation results
+    with st.spinner('Performing cross-validation...'):
+        lr_cv_scores = cache_cross_val_scores(lr_model, X_train_final, y_train, cv_folds)
+        dt_cv_scores = cache_cross_val_scores(dt_model, X_train_final, y_train, cv_folds)
     
     cv_results = pd.DataFrame({
         'Fold': range(1, cv_folds + 1),
@@ -522,3 +666,9 @@ if len(selected_features) > 0:
     
     st.write("**Cross-Validation Summary:**")
     st.dataframe(cv_summary.round(4))
+    
+    # Add reset button
+    st.divider()
+    if st.button("Reset All Settings to Defaults", type="secondary"):
+        st.session_state.clear()
+        st.rerun()
