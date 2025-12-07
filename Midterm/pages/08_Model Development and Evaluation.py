@@ -455,27 +455,6 @@ if len(selected_features) > 0:
     # =============================================================================
     
     if use_oversampling:
-        st.header("Oversampling Impact Analysis")
-        
-        st.markdown("""
-        ### **Impact of SMOTE Oversampling:**
-        
-        **Benefits:**
-        - ✅ Balanced classes (1:1 ratio)
-        - ✅ Better representation of minority class
-        - ✅ Reduced model bias toward majority class
-        - ✅ Improved recall for heart disease detection
-        
-        **Considerations:**
-        - ⚠️ Synthetic data may not perfectly represent real-world patterns
-        - ⚠️ Test set contains only real data for fair evaluation
-        - ⚠️ Potential overfitting to synthetic patterns
-        
-        **Current Implementation:**
-        - Synthetic data used **only in training**
-        - Test set contains **100% real data**
-        - This ensures fair evaluation of model generalization
-        """)
         
         # Compare with hypothetical no-oversampling scenario
         st.subheader("Class Balance Comparison")
