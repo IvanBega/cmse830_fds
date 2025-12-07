@@ -159,4 +159,5 @@ st.markdown("""
 st.header("GitHub Repository and Documentation")
 st.markdown("""
             1. The final project repository is available at the link: https://github.com/IvanBega/cmse830_fds/tree/main/Midterm
+            2. There is a detailed ReadMe file in the project folder, which explains the datasets used, as well as installation guide for the Streamlit project
             """)
