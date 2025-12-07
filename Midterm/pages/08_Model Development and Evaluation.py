@@ -16,34 +16,100 @@ st.set_page_config(page_title="Model Development & Evaluation")
 
 st.title("Model Development & Evaluation")
 st.markdown("This page demonstrates machine learning model development, evaluation, and comparison for heart disease prediction.")
+st.markdown("Note: your settings are saved and cached using the hyperlink")
 
 # =============================================================================
-# CACHING AND SESSION STATE SETUP
+# IMPROVED SESSION STATE INITIALIZATION WITH QUERY PARAMS
 # =============================================================================
 
-# Initialize session state variables if they don't exist
-if 'use_oversampling' not in st.session_state:
-    st.session_state.use_oversampling = True
-if 'scale_features' not in st.session_state:
-    st.session_state.scale_features = True
-if 'selected_features' not in st.session_state:
-    st.session_state.selected_features = None
-if 'test_size' not in st.session_state:
-    st.session_state.test_size = 0.2
-if 'random_state' not in st.session_state:
-    st.session_state.random_state = 42
-if 'lr_params' not in st.session_state:
-    st.session_state.lr_params = {'C': 1.0, 'max_iter': 200, 'penalty': 'l2'}
-if 'dt_params' not in st.session_state:
-    st.session_state.dt_params = {'max_depth': 5, 'min_samples_split': 2, 'criterion': 'gini'}
-if 'cv_folds' not in st.session_state:
-    st.session_state.cv_folds = 5
-if 'data_loaded' not in st.session_state:
-    st.session_state.data_loaded = False
-if 'models_trained' not in st.session_state:
-    st.session_state.models_trained = False
+def initialize_session_state():
+    """Initialize session state from query params or defaults"""
+    query_params = st.query_params
+    
+    # Initialize with defaults or query params
+    defaults = {
+        'use_oversampling': True,
+        'scale_features': True,
+        'test_size': 0.2,
+        'random_state': 42,
+        'cv_folds': 5,
+        'data_loaded': False,
+        'models_trained': False,
+        'lr_params': {'C': 1.0, 'max_iter': 200, 'penalty': 'l2'},
+        'dt_params': {'max_depth': 5, 'min_samples_split': 2, 'criterion': 'gini'}
+    }
+    
+    for key, default_value in defaults.items():
+        if key not in st.session_state:
+            # Try to get from query params
+            param_value = query_params.get(key, None)
+            if param_value:
+                if isinstance(default_value, bool):
+                    st.session_state[key] = param_value[0].lower() == 'true'
+                elif isinstance(default_value, (int, float)):
+                    try:
+                        st.session_state[key] = type(default_value)(param_value[0])
+                    except:
+                        st.session_state[key] = default_value
+                elif key == 'lr_params':
+                    # Reconstruct lr_params from query params
+                    lr_C = float(query_params.get('lr_C', ['1.0'])[0])
+                    lr_max_iter = int(query_params.get('lr_max_iter', ['200'])[0])
+                    lr_penalty = query_params.get('lr_penalty', ['l2'])[0]
+                    st.session_state.lr_params = {
+                        'C': lr_C,
+                        'max_iter': lr_max_iter,
+                        'penalty': lr_penalty
+                    }
+                elif key == 'dt_params':
+                    # Reconstruct dt_params from query params
+                    dt_max_depth = int(query_params.get('dt_max_depth', ['5'])[0])
+                    dt_min_samples_split = int(query_params.get('dt_min_samples_split', ['2'])[0])
+                    dt_criterion = query_params.get('dt_criterion', ['gini'])[0]
+                    st.session_state.dt_params = {
+                        'max_depth': dt_max_depth,
+                        'min_samples_split': dt_min_samples_split,
+                        'criterion': dt_criterion
+                    }
+                else:
+                    st.session_state[key] = default_value
+            else:
+                st.session_state[key] = default_value
+    
+    # Initialize selected_features separately (can't easily serialize to URL)
+    if 'selected_features' not in st.session_state:
+        st.session_state.selected_features = None
 
-# Cache expensive data loading operations
+def update_query_params():
+    """Update URL query parameters with current session state"""
+    params = {}
+    
+    # Add simple parameters
+    simple_params = ['use_oversampling', 'scale_features', 'test_size', 
+                    'random_state', 'cv_folds']
+    
+    for param in simple_params:
+        if param in st.session_state:
+            params[param] = str(st.session_state[param])
+    
+    # Add nested parameters
+    if 'lr_params' in st.session_state:
+        for k, v in st.session_state.lr_params.items():
+            params[f'lr_{k}'] = str(v)
+    
+    if 'dt_params' in st.session_state:
+        for k, v in st.session_state.dt_params.items():
+            params[f'dt_{k}'] = str(v)
+    
+    st.query_params.update(**params)
+
+# Initialize session state
+initialize_session_state()
+
+# =============================================================================
+# CACHING FUNCTIONS (UNCHANGED)
+# =============================================================================
+
 @st.cache_data(ttl=3600, show_spinner=True)
 def load_cached_model_data(use_oversampling):
     """Cache the model data loading to avoid reloading on every interaction"""
@@ -135,45 +201,54 @@ def cache_cross_val_scores(_model, X_train, y_train, cv_folds):
     return cross_val_score(_model, X_train, y_train, cv=cv_folds, scoring='accuracy')
 
 # =============================================================================
-# SECTION 1: DATA PREPARATION
+# MODIFIED WIDGETS WITH PERSISTENCE
 # =============================================================================
 
-# Data sampling option - use session state for persistence
+# Data sampling option - with callback to update query params
 st.subheader("Use Oversampling and Scaling?")
 
 col1, col2 = st.columns(2)
 with col1:
+    def update_oversampling():
+        st.session_state.use_oversampling = st.session_state.oversampling_checkbox
+        update_query_params()
+        # Clear relevant caches when oversampling changes
+        st.cache_data.clear()
+    
     use_oversampling = st.checkbox(
         "Use SMOTE Oversampling to handle class imbalance", 
         value=st.session_state.use_oversampling,
-        key='oversampling_checkbox'
+        key='oversampling_checkbox',
+        on_change=update_oversampling
     )
-    st.session_state.use_oversampling = use_oversampling
 
 with col2:
+    def update_scaling():
+        st.session_state.scale_features = st.session_state.scaling_checkbox
+        update_query_params()
+    
     scale_features = st.checkbox(
         "Apply StandardScaler", 
         value=st.session_state.scale_features,
-        key='scaling_checkbox'
+        key='scaling_checkbox',
+        on_change=update_scaling
     )
-    st.session_state.scale_features = scale_features
 
 # Load modeling data with caching
 with st.spinner('Loading data...'):
-    df_model = load_cached_model_data(use_oversampling)
+    df_model = load_cached_model_data(st.session_state.use_oversampling)
     st.session_state.data_loaded = True
 
 st.subheader("Dataset Stats for Machine Learning Model")
 st.write(f"**Shape:** {df_model.shape}")
 st.write(f"**Number of Features:** {len(df_model.columns) - 1}")  # Excluding target
-st.write(f"**Using Oversampling:** {'Yes' if use_oversampling else 'No'}")
+st.write(f"**Using Oversampling:** {'Yes' if st.session_state.use_oversampling else 'No'}")
 
 # Show target distribution
 st.subheader("Distribution of Heart Disease")
-if 'is_synthetic' in df_model.columns and use_oversampling:
+if 'is_synthetic' in df_model.columns and st.session_state.use_oversampling:
     # Show synthetic vs real data distribution
     synthetic_counts = df_model['is_synthetic'].value_counts()
-    synthetic_percentages = (synthetic_counts / len(df_model) * 100).round(2)
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -193,28 +268,31 @@ with col2:
     st.metric("Heart Disease", f"{target_counts[1]}")
 with col3:
     imbalance_ratio = target_counts[0] / target_counts[1] if target_counts[1] > 0 else 0
-    st.metric("Class Balance", f"{imbalance_ratio:.2f}:1" if not use_oversampling else "1:1 (Balanced)")
+    st.metric("Class Balance", f"{imbalance_ratio:.2f}:1" if not st.session_state.use_oversampling else "1:1 (Balanced)")
 
-# Feature selection
+# Feature selection with persistence
 st.subheader("Which Features to Use?")
-
-# Select features for modeling
 exclude_cols = ['Heart Disease Status_encoded', 'is_synthetic'] if 'is_synthetic' in df_model.columns else ['Heart Disease Status_encoded']
 feature_cols = [col for col in df_model.columns if col not in exclude_cols]
 
-# Use session state to remember selected features
-default_features = [col for col in feature_cols if col not in ['Age_bin', 'BMI_category', 'BP_category']][:10]
+# Use a session state key that persists
 if st.session_state.selected_features is None:
+    default_features = [col for col in feature_cols if col not in ['Age_bin', 'BMI_category', 'BP_category']][:10]
     st.session_state.selected_features = default_features
 
-# Let user select features
+# Modified multiselect with callback
+def update_selected_features():
+    st.session_state.selected_features = st.session_state.features_multiselect
+    # Clear cache since features changed
+    st.cache_data.clear()
+
 selected_features = st.multiselect(
     "Features",
     options=feature_cols,
     default=st.session_state.selected_features,
-    key='features_multiselect'
+    key='features_multiselect',
+    on_change=update_selected_features
 )
-st.session_state.selected_features = selected_features
 
 # Prepare feature matrix X and target y
 if len(selected_features) > 0:
@@ -231,14 +309,20 @@ if len(selected_features) > 0:
     # Train-test split with caching
     st.subheader("Train-Test Split")
     
+    def update_test_size():
+        st.session_state.test_size = st.session_state.test_size_slider
+        update_query_params()
+        # Clear cache since test size changed
+        st.cache_data.clear()
+    
     test_size = st.slider(
         "Select test set size:", 
         0.1, 0.4, 
         st.session_state.test_size, 
         0.05,
-        key='test_size_slider'
+        key='test_size_slider',
+        on_change=update_test_size
     )
-    st.session_state.test_size = test_size
     
     # ADDED EXPLANATION: Test set size recommendation
     st.write("**Test Set Size Recommendation:**")
@@ -249,18 +333,24 @@ if len(selected_features) > 0:
     - The 80/20 split is a common standard that provides enough data for both training and reliable evaluation
     """)
     
+    def update_random_state():
+        st.session_state.random_state = st.session_state.random_state_input
+        update_query_params()
+        # Clear cache since random state changed
+        st.cache_data.clear()
+    
     random_state = st.number_input(
         "Random seed:", 
         0, 100, 
         st.session_state.random_state,
-        key='random_state_input'
+        key='random_state_input',
+        on_change=update_random_state
     )
-    st.session_state.random_state = random_state
     
     # Cache the train-test split
     with st.spinner('Splitting data into train/test sets...'):
         X_train, X_test, y_train, y_test, synthetic_info = cache_train_test_split(
-            df_model, selected_features, test_size, random_state, use_oversampling
+            df_model, selected_features, test_size, random_state, st.session_state.use_oversampling
         )
     
     col1, col2, col3, col4 = st.columns(4)
@@ -272,13 +362,13 @@ if len(selected_features) > 0:
         train_real = len(X_train) - (len(synthetic_info.get('synthetic_data', [])) if 'synthetic_data' in synthetic_info else 0)
         st.metric("Real Training Samples", train_real)
     with col4:
-        if use_oversampling and 'synthetic_data' in synthetic_info:
+        if st.session_state.use_oversampling and 'synthetic_data' in synthetic_info:
             st.metric("Synthetic Training Samples", len(synthetic_info['synthetic_data']))
     
     # Cache scaling operation
-    with st.spinner('Scaling features...' if scale_features else 'Preparing features...'):
+    with st.spinner('Scaling features...' if st.session_state.scale_features else 'Preparing features...'):
         X_train_final, X_test_final, _ = cache_scaled_data(
-            X_train, X_test, selected_features, scale_features
+            X_train, X_test, selected_features, st.session_state.scale_features
         )
     
     # =============================================================================
@@ -297,7 +387,7 @@ if len(selected_features) > 0:
     """)
     
     st.markdown(f"""
-    **Using {'oversampled' if use_oversampling else 'original'} data.
+    **Using {'oversampled' if st.session_state.use_oversampling else 'original'} data.
     """)
     
     # Model training
@@ -305,37 +395,53 @@ if len(selected_features) > 0:
     
     col1, col2, col3 = st.columns(3)
     with col1:
+        def update_C_value():
+            st.session_state.lr_params['C'] = st.session_state.C_value_input
+            update_query_params()
+            # Clear model cache since parameter changed
+            st.cache_resource.clear()
+        
         C_value = st.number_input(
             "Regularization (C):", 
             0.01, 10.0, 
             st.session_state.lr_params['C'], 
             0.1,
-            key='C_value_input'
+            key='C_value_input',
+            on_change=update_C_value
         )
-        st.session_state.lr_params['C'] = C_value
     with col2:
+        def update_max_iter():
+            st.session_state.lr_params['max_iter'] = st.session_state.max_iter_input
+            update_query_params()
+            st.cache_resource.clear()
+        
         max_iter = st.number_input(
             "Max iterations:", 
             100, 1000, 
             st.session_state.lr_params['max_iter'], 
             50,
-            key='max_iter_input'
+            key='max_iter_input',
+            on_change=update_max_iter
         )
-        st.session_state.lr_params['max_iter'] = max_iter
     with col3:
+        def update_penalty():
+            st.session_state.lr_params['penalty'] = st.session_state.penalty_selectbox
+            update_query_params()
+            st.cache_resource.clear()
+        
         penalty_type = st.selectbox(
             "Penalty:", 
             ['l2', 'l1', 'elasticnet'],
             index=['l2', 'l1', 'elasticnet'].index(st.session_state.lr_params['penalty']),
-            key='penalty_selectbox'
+            key='penalty_selectbox',
+            on_change=update_penalty
         )
-        st.session_state.lr_params['penalty'] = penalty_type
     
     # Cache the trained model
     with st.spinner('Training Logistic Regression model...'):
         lr_model = cache_lr_model(
             X_train_final, y_train, C_value, max_iter, penalty_type, 
-            random_state, use_oversampling
+            random_state, st.session_state.use_oversampling
         )
     
     # Predictions
@@ -411,7 +517,7 @@ if len(selected_features) > 0:
     """)
     
     st.markdown(f"""
-    **Using {'oversampled' if use_oversampling else 'original'} data.
+    **Using {'oversampled' if st.session_state.use_oversampling else 'original'} data.
     """)
     
     # Model training
@@ -419,35 +525,50 @@ if len(selected_features) > 0:
     
     col1, col2, col3 = st.columns(3)
     with col1:
+        def update_max_depth():
+            st.session_state.dt_params['max_depth'] = st.session_state.dt_depth_slider
+            update_query_params()
+            st.cache_resource.clear()
+        
         max_depth = st.slider(
             "Max tree depth:", 
             1, 20, 
             st.session_state.dt_params['max_depth'], 
-            key="dt_depth_slider"
+            key="dt_depth_slider",
+            on_change=update_max_depth
         )
-        st.session_state.dt_params['max_depth'] = max_depth
     with col2:
+        def update_min_samples_split():
+            st.session_state.dt_params['min_samples_split'] = st.session_state.dt_split_slider
+            update_query_params()
+            st.cache_resource.clear()
+        
         min_samples_split = st.slider(
             "Min samples to split:", 
             2, 20, 
             st.session_state.dt_params['min_samples_split'], 
-            key="dt_split_slider"
+            key="dt_split_slider",
+            on_change=update_min_samples_split
         )
-        st.session_state.dt_params['min_samples_split'] = min_samples_split
     with col3:
+        def update_criterion():
+            st.session_state.dt_params['criterion'] = st.session_state.dt_criterion_selectbox
+            update_query_params()
+            st.cache_resource.clear()
+        
         criterion = st.selectbox(
             "Split criterion:", 
             ['gini', 'entropy'],
             index=['gini', 'entropy'].index(st.session_state.dt_params['criterion']),
-            key="dt_criterion_selectbox"
+            key="dt_criterion_selectbox",
+            on_change=update_criterion
         )
-        st.session_state.dt_params['criterion'] = criterion
     
     # Cache the trained model
     with st.spinner('Training Decision Tree model...'):
         dt_model = cache_dt_model(
             X_train_final, y_train, max_depth, min_samples_split, 
-            criterion, random_state, use_oversampling
+            criterion, random_state, st.session_state.use_oversampling
         )
     
     # Predictions
@@ -605,7 +726,7 @@ if len(selected_features) > 0:
     # SECTION 5: OVERSAMPLING IMPACT ANALYSIS
     # =============================================================================
     
-    if use_oversampling:
+    if st.session_state.use_oversampling:
         
         # Compare with hypothetical no-oversampling scenario
         st.subheader("Class Balance Comparison")
@@ -633,13 +754,19 @@ if len(selected_features) > 0:
     
     st.subheader("Cross-Validation Results")
     
+    def update_cv_folds():
+        st.session_state.cv_folds = st.session_state.cv_folds_slider
+        update_query_params()
+        # Clear cache since cv folds changed
+        st.cache_data.clear()
+    
     cv_folds = st.slider(
         "Number of CV folds:", 
         3, 10, 
         st.session_state.cv_folds,
-        key="cv_folds_slider"
+        key="cv_folds_slider",
+        on_change=update_cv_folds
     )
-    st.session_state.cv_folds = cv_folds
     
     # Cache cross-validation results
     with st.spinner('Performing cross-validation...'):
@@ -667,8 +794,35 @@ if len(selected_features) > 0:
     st.write("**Cross-Validation Summary:**")
     st.dataframe(cv_summary.round(4))
     
-    # Add reset button
-    st.divider()
+    # Show current URL with settings
+    st.subheader("Share Your Configuration")
+    current_url = st.query_params.to_dict()
+    if current_url:
+        st.write("**Current settings saved in URL:**")
+        st.json(current_url)
+        st.write("You can Bookmark this page to save your settings!")
+    
+else:
+    st.warning("Please select at least one feature to proceed with modeling.")
+
+# =============================================================================
+# RESET BUTTON WITH QUERY PARAM CLEARING
+# =============================================================================
+st.divider()
+col1, col2 = st.columns(2)
+
+with col1:
     if st.button("Reset All Settings to Defaults", type="secondary"):
-        st.session_state.clear()
+        # Clear all session state
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        
+        # Clear query parameters
+        st.query_params.clear()
+        
+        # Clear all caches
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        
+        # Rerun to apply defaults
         st.rerun()

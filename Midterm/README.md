@@ -1,19 +1,68 @@
-# Midterm Project ReadMe
-### Why I chose this dataset
-I chose the "Heart Disease" and "Heart Disease Spread by Country" datasets because I want to explore in details what lifestyle habits can contribute to this disease and what can we do to prevent it. Unfortunately, according to World Health Organization (WHO), heart-related diseases remain the number one cause of death around the world. 
+# Final Project ReadMe
 
-The primary reason I decided to go with the dataset is due to its simple yet rich features, such as age, BMI, stress level, sugar consumption, vital blood parameters, quality of sleep. They seem attractive to me because nearly every person can quickly determine to what "bucket" they belong without performing expensive medical assessments like MRI, X-Ray, etc. My dataset will try to answer the question of how likely it is for a person to develop heart diseases given their life circumstances.
+## Heart Disease Prediction Dashboard
 
-### What have I learned from IDA/EDA
+An interactive Streamlit application for predicting heart disease risk using clinical data, country-level statistics, and socioeconomic indicators. This comprehensive tool enables data exploration, feature engineering, machine learning modeling, and result visualization in a user-friendly interface.
 
-First, both datasets are almost complete and have very little missing data. They contain numerical, categorical, binary, and ordinal features which need to be handled accordingly. I have noticed that "Heart Disease" dataset is undersampled with respect to people who have reported heart disease.
-### What preprocessing steps I've completed
+## The Datasets
 
-- Handling missing values: imputation using KNN with n = 5
-- Balancing undersampled records who have reported heart disease using SMOTE method from imblearn library
-- Encoding binary variables with LabelEncoder, encoding ordinal variables with OrdinalEncoder
-### What I've tried with Streamlit so far
-- Pie plot
-- Scatter plot
-- Strip plot
-- Choropleth map
+### 1. First Dataset: Heart Disease Clinical Data
+**Source**: [Kaggle - Heart Disease Dataset](https://www.kaggle.com/datasets/oktayrdeki/heart-disease)
+- **Description**: Patient-level clinical data including age, BMI, blood pressure, cholesterol levels, stress levels, and heart disease status
+- **Size**: 10,000+ patient records
+- **Key Features**: Age, BMI, Blood Pressure, Cholesterol Level, Stress Level, Heart Disease Status
+- **Purpose**: Primary dataset for training machine learning models
+
+### 2. Second Dataset: Heart Disease Rate by Country
+**Source**: [World Population Review](https://worldpopulationreview.com/country-rankings/heart-disease-rates-by-country)
+- **Description**: Country-level heart disease statistics including prevalence, mortality rates, and DALYs (Disability-Adjusted Life Years)
+- **Size**: 200+ countries
+- **Key Features**: Prevalence rates (2021), Death counts (2021), Standardized rates (2022), DALYs
+- **Purpose**: Geographic analysis and country-level risk factors
+
+### 3. Third Dataset: Health Indicators by Country
+**Source**: World Bank / WHO Socioeconomic Indicators
+- **Description**: Comprehensive socioeconomic and health indicators across countries
+- **Size**: 180+ countries with multiple years of data
+- **Key Features**: GDP, Life Expectancy, Physicians per 1000, Urban Population, Infant Mortality, Unemployment Rate
+- **Purpose**: Socioeconomic context and macro-level risk factor analysis
+
+## Features
+
+### Advanced Data Exploration
+- Interactive visualizations including parallel coordinates, 3D scatter plots, and raincloud plots
+- Comprehensive statistical analysis across all datasets
+- Country discrepancy analysis and data merging
+
+### Feature Engineering
+- Age, BMI, and Blood Pressure binning/discretization
+- Principal Component Analysis (PCA) for dimensionality reduction
+- One-hot encoding and data normalization
+- SMOTE oversampling for class imbalance handling
+
+### Machine Learning Models
+- Interpretable model with regularization options
+- Non-linear model with feature importance analysis
+- Interactive parameter tuning with real-time updates
+- Comprehensive evaluation metrics (Accuracy, Precision, Recall, F1, ROC-AUC)
+
+## How to Run
+
+### Prerequisites
+- Python 3.8 or higher
+- pip package manager
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/IvanBega/cmse830_fds.git
+   cd Midterm
+   
+2. Install packages
+    ```bash
+    pip install -r requirements.txt
+    
+3. Run the Streamlit app
+    ```bash
+    streamlit run main.py
