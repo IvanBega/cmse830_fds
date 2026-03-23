@@ -796,7 +796,7 @@ if len(selected_features) > 0:
     st.dataframe(cv_summary.round(4))
     
     # Show current URL with settings
-    st.subheader("Share Your Configuration")
+    #st.subheader("Share Your Configuration")
     current_url = st.query_params.to_dict()
     if current_url:
         st.write("**Current settings saved in URL:**")

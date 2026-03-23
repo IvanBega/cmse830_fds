@@ -37,10 +37,10 @@ with col2:
     st.metric("Percentage of People with Heart Disease", f"{percentage}%")
     
 with col3:
-    st.metric("Average age", f"{df['Age'].mean()}")
+    st.metric("Average age", f"{df['Age'].mean():.1f}")
 
 with col4:
-    st.metric("Average BMI", f"{df['BMI'].mean()    }")
+    st.metric("Average BMI", f"{df['BMI'].mean():.1f}")
     
 
 # https://docs.streamlit.io/develop/api-reference/text/st.markdown

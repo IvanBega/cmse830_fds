@@ -8,6 +8,12 @@ df = load_and_clean()
 df_new = load_oversampled(load_encoded_dropped())
 st.title("Class Imbalance by Heart Disease Status")
 
+st.warning('''Please Note: Imputation of the target is considered bad by many data scientists, 
+           since it artificially introduces information that would not be available during real-world prediction.
+           It can significantly bias the model and leak information from the target.
+           In general, imputation of the target should never be done. Here it is performed only for educational purposes.
+
+           ''')
 st.markdown('''When analyzing heart health, we must ensure that we have enough data. If the number of people who
             have a Heart Disease is not represented well in the dataset, like in our example,
             we might have a bias towards people with no Heart Disease. To resolve this issue, an

@@ -169,8 +169,10 @@ else:
 
 # Risk factor correlation with country data (optional additional insight)
 if len(filtered_df) > 0 and len(selected_countries) > 0:
-    st.subheader("Risk Factor Analysis")
-    st.write("This allows us to see which risk factors are most common in filtered population")
+    st.subheader("How likely are you to get heart disease?")
+    st.write('''This allows us to see which risk factors are most common in filtered population. 
+             It can be useful to assess the risks relative to common bad habits of the society,
+             and make corresponding conclusions about your way of life.''')
     # Calculate risk factors in filtered population
     risk_factors = {
         'High BMI (>30)': (filtered_df['BMI'] > 30).mean() * 100,

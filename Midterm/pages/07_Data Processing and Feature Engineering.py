@@ -31,7 +31,7 @@ Additionally, binning allows us to greatly reduce the impact of extreme outliers
          """)
 # Binning for Age
 st.subheader("Age Binning")
-st.write("""With respec to the heart disease analysis, it makes sense to slits age into four bins:
+st.write("""With respect to the heart disease analysis, it makes sense to split age into four bins:
          
          - Young (0 to 35)
          - Middle (36-50)

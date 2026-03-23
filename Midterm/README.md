@@ -1,5 +1,9 @@
 # Final Project ReadMe
 
+## App Link
+
+The website is available at the link: https://ivanbega-cmse830-fds-midtermmain-ah7g5v.streamlit.app/
+
 ## Heart Disease Prediction Dashboard
 
 An interactive Streamlit application for predicting heart disease risk using clinical data, country-level statistics, and socioeconomic indicators. This comprehensive tool enables data exploration, feature engineering, machine learning modeling, and result visualization in a user-friendly interface.
